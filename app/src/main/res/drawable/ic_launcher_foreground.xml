@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+
+    android:width="108dp"
+
+    android:height="108dp"
+
+    android:viewportWidth="108"
+
+    android:viewportHeight="108">
+
+
+    <!-- 출석 카드 -->
+
+    <path
+
+        android:fillColor="#FFFFFF"
+
+        android:pathData="
+
+        M28,22
+
+        C28,18 32,15 36,15
+
+        L72,15
+
+        C76,15 80,18 80,22
+
+        L80,82
+
+        C80,86 76,89 72,89
+
+        L36,89
+
+        C32,89 28,86 28,82
+
+        Z" />
+
+
+
+    <!-- 카드 상단 줄 -->
+
+    <path
+
+        android:fillColor="#1565C0"
+
+        android:pathData="
+
+        M38,32
+
+        L70,32
+
+        L70,38
+
+        L38,38
+
+        Z" />
+
+
+
+    <!-- 체크 표시 -->
+
+    <path
+
+        android:fillColor="#00C853"
+
+        android:pathData="
+
+        M38,58
+
+        L48,68
+
+        L72,44
+
+        L78,50
+
+        L48,80
+
+        L32,64
+
+        Z" />
+
+
+</vector>
