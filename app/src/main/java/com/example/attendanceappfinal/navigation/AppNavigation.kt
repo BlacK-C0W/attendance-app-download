@@ -133,6 +133,10 @@ fun AppNavigation(
 
     }
 
+    var lastParentBackTime by remember {
+        mutableLongStateOf(0L)
+    }
+
     var lastAdminBackTime by remember {
 
         mutableLongStateOf(0L)
@@ -248,6 +252,18 @@ fun AppNavigation(
         }
 
         "parent" -> {
+
+            BackHandler {
+                val now = System.currentTimeMillis()
+                if (now - lastParentBackTime < 2_000) {
+                    currentUser = null
+                    prefs.edit().clear().apply()
+                    currentScreen = "login"
+                } else {
+                    lastParentBackTime = now
+                    Toast.makeText(context, "한 번 더 누르면 로그아웃합니다.", Toast.LENGTH_SHORT).show()
+                }
+            }
 
             currentUser?.let { user ->
                 ParentPage(user = user, onLogout = {
