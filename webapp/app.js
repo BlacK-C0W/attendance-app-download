@@ -1,6 +1,6 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
 import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
-import { getDatabase, get, ref, set } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js';
+import { getDatabase, get, ref, set, remove } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyD5g3A5SqmP7DwNeSxTBBjRGZJuGGhkSrQ',
@@ -76,6 +76,26 @@ function enrichPersonalAttendance(records, user, timetable) {
   });
 }
 
+function notificationSection(notifications, path, allowRead) {
+  const sorted = notifications.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+  const unread = sorted.filter(notification => !notification.read).length;
+  return `<article class="card"><h2>알림${unread ? ` <span class="badge">새 알림 ${unread}</span>` : ''}</h2><div class="list">${sorted.length ? sorted.map(notification => {
+    const date = notification.timestamp ? new Intl.DateTimeFormat('ko-KR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Asia/Seoul' }).format(new Date(notification.timestamp)) : '';
+    return `<div class="row"><div><strong>${escapeHtml(notification.title || '출결 알림')}</strong><br><span>${escapeHtml(notification.message || '')}</span><br><span class="muted">${escapeHtml(date)} · ${notification.read ? '읽음' : '새 알림'}</span></div><div class="notification-actions">${allowRead && !notification.read ? `<button class="text-button" data-read-path="${escapeHtml(path)}" data-notification-id="${escapeHtml(notification.id)}">읽음</button>` : ''}<button class="text-button" data-delete-path="${escapeHtml(path)}" data-notification-id="${escapeHtml(notification.id)}">삭제</button></div></div>`;
+  }).join('') : '<p class="empty">알림이 없습니다.</p>'}</div></article>`;
+}
+
+function bindNotificationActions(path, reload, allowRead) {
+  if (allowRead) document.querySelectorAll('[data-read-path]').forEach(button => button.addEventListener('click', async () => {
+    await set(ref(db, `${path}/${button.dataset.notificationId}/read`), true);
+    reload();
+  }));
+  document.querySelectorAll('[data-delete-path]').forEach(button => button.addEventListener('click', async () => {
+    await remove(ref(db, `${path}/${button.dataset.notificationId}`));
+    reload();
+  }));
+}
+
 async function loadAttendancePaths(paths) {
   const snapshots = await Promise.all(paths.map(path => get(ref(db, path))));
   return snapshots.flatMap(flattenAttendance);
@@ -83,19 +103,25 @@ async function loadAttendancePaths(paths) {
 
 async function renderStudent(user) {
   const path = user.isPreStudent ? `preAttendance/${user.preStudentId || user.uid}` : user.isUnregisteredStudent ? `unregisteredAttendance/${user.unregisteredStudentId || user.uid}` : `attendance/${user.uid}`;
-  const [attendanceSnapshot, timetableSnapshot] = await Promise.all([get(ref(db, path)), get(ref(db, `timetable/${user.uid}`))]);
+  const notificationPath = `notifications/${user.uid}`;
+  const [attendanceSnapshot, timetableSnapshot, notificationSnapshot] = await Promise.all([get(ref(db, path)), get(ref(db, `timetable/${user.uid}`)), get(ref(db, notificationPath))]);
   const timetable = Object.values(timetableSnapshot.val() || {});
   const records = enrichPersonalAttendance(studentAttendanceRecords(attendanceSnapshot), user, timetable);
-  content.innerHTML = `<article class="card"><h2>내 출결 기록</h2><p>${escapeHtml(user.grade || '학년 미등록')} · ${escapeHtml(user.className || '반 미등록')}</p><div class="list">${records.length ? attendanceRows(records) : '<p class="empty">출결 기록이 없습니다.</p>'}</div></article>`;
+  const notifications = Object.entries(notificationSnapshot.val() || {}).map(([id, value]) => ({ id, ...value }));
+  content.innerHTML = `<article class="card"><h2>내 출결 기록</h2><p>${escapeHtml(user.grade || '학년 미등록')} · ${escapeHtml(user.className || '반 미등록')}</p><div class="list">${records.length ? attendanceRows(records) : '<p class="empty">출결 기록이 없습니다.</p>'}</div></article>${notificationSection(notifications, notificationPath, false)}`;
+  bindNotificationActions(notificationPath, () => renderStudent(user), false);
 }
 
 async function renderParent(user) {
   const studentId = user.linkedStudentId;
   if (!studentId) { content.innerHTML = '<article class="card"><h2>학부모 연결 필요</h2><p>관리자에게 학생 연결을 요청하세요.</p></article>'; return; }
-  const [studentSnapshot, attendanceSnapshot, timetableSnapshot] = await Promise.all([get(ref(db, `users/${studentId}`)), get(ref(db, `attendance/${studentId}`)), get(ref(db, `timetable/${studentId}`))]);
+  const notificationPath = `parentNotifications/${studentId}`;
+  const [studentSnapshot, attendanceSnapshot, timetableSnapshot, notificationSnapshot] = await Promise.all([get(ref(db, `users/${studentId}`)), get(ref(db, `attendance/${studentId}`)), get(ref(db, `timetable/${studentId}`)), get(ref(db, notificationPath))]);
   const student = studentSnapshot.val() || {};
   const records = enrichPersonalAttendance(studentAttendanceRecords(attendanceSnapshot), student, Object.values(timetableSnapshot.val() || {}));
-  content.innerHTML = `<article class="card"><h2>${escapeHtml(student.name || '학생')} 출결</h2><p>${escapeHtml(student.grade || '학년 미등록')} · ${escapeHtml(student.className || '반 미등록')}</p><div class="list">${records.length ? attendanceRows(records) : '<p class="empty">출결 기록이 없습니다.</p>'}</div></article>`;
+  const notifications = Object.entries(notificationSnapshot.val() || {}).map(([id, value]) => ({ id, ...value }));
+  content.innerHTML = `<article class="card"><h2>${escapeHtml(student.name || '학생')} 출결</h2><p>${escapeHtml(student.grade || '학년 미등록')} · ${escapeHtml(student.className || '반 미등록')}</p><div class="list">${records.length ? attendanceRows(records) : '<p class="empty">출결 기록이 없습니다.</p>'}</div></article>${notificationSection(notifications, notificationPath, true)}`;
+  bindNotificationActions(notificationPath, () => renderParent(user), true);
 }
 
 async function renderTeacher(user) {
