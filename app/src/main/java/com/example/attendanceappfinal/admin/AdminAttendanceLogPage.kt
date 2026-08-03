@@ -13,6 +13,7 @@ import androidx.compose.ui.unit.dp
 import com.example.attendanceappfinal.UiConfig
 import com.example.attendanceappfinal.model.AttendanceLog
 import com.example.attendanceappfinal.repository.AttendanceRepository
+import com.google.firebase.database.FirebaseDatabase
 
 
 
@@ -69,6 +70,65 @@ fun AdminAttendanceLogPage(
 
 
 
+
+    val database = FirebaseDatabase.getInstance()
+    var showAutomaticLogDeleteConfirm by remember { mutableStateOf(false) }
+    var deletingAutomaticLogs by remember { mutableStateOf(false) }
+    var deleteMessage by remember { mutableStateOf("") }
+
+    fun deleteAutomaticLogs() {
+        deletingAutomaticLogs = true
+        database.getReference("attendance_logs").get()
+            .addOnSuccessListener { snapshot ->
+                val updates = mutableMapOf<String, Any?>()
+                snapshot.children.forEach { item ->
+                    if (item.getValue(AttendanceLog::class.java)?.automatic == true) {
+                        item.key?.let { updates[it] = null }
+                    }
+                }
+                if (updates.isEmpty()) {
+                    deletingAutomaticLogs = false
+                    deleteMessage = "삭제할 자동 결석 처리 내역이 없습니다."
+                    return@addOnSuccessListener
+                }
+                database.getReference("attendance_logs").updateChildren(updates)
+                    .addOnSuccessListener {
+                        deletingAutomaticLogs = false
+                        deleteMessage = "자동 결석 처리 내역 ${updates.size}건을 삭제했습니다."
+                    }
+                    .addOnFailureListener {
+                        deletingAutomaticLogs = false
+                        deleteMessage = "자동 결석 처리 내역을 삭제하지 못했습니다."
+                    }
+            }
+            .addOnFailureListener {
+                deletingAutomaticLogs = false
+                deleteMessage = "자동 결석 처리 내역을 불러오지 못했습니다."
+            }
+    }
+
+    if (showAutomaticLogDeleteConfirm) {
+        AlertDialog(
+            onDismissRequest = { if (!deletingAutomaticLogs) showAutomaticLogDeleteConfirm = false },
+            title = { Text("자동 결석 처리 내역 삭제") },
+            text = { Text("자동 결석 처리 목록을 모두 삭제할까요? 실제 학생 출결 기록은 삭제되지 않습니다.") },
+            confirmButton = {
+                TextButton(
+                    enabled = !deletingAutomaticLogs,
+                    onClick = {
+                        showAutomaticLogDeleteConfirm = false
+                        deleteAutomaticLogs()
+                    }
+                ) { Text("전체 삭제") }
+            },
+            dismissButton = {
+                TextButton(
+                    enabled = !deletingAutomaticLogs,
+                    onClick = { showAutomaticLogDeleteConfirm = false }
+                ) { Text("취소") }
+            }
+        )
+    }
 
     val filteredLogs =
 
@@ -332,6 +392,23 @@ fun AdminAttendanceLogPage(
 
 
         }
+
+        Spacer(Modifier.height(10.dp))
+
+        OutlinedButton(
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !deletingAutomaticLogs,
+            onClick = { showAutomaticLogDeleteConfirm = true }
+        ) {
+            Text(if (deletingAutomaticLogs) "삭제 중..." else "자동 결석 처리 내역 전체 삭제")
+        }
+
+        Text(
+            "실제 출결 기록은 유지하고 자동 결석 처리 목록만 삭제합니다.",
+            style = MaterialTheme.typography.bodySmall
+        )
+
+        if (deleteMessage.isNotBlank()) Text(deleteMessage)
 
 
 
