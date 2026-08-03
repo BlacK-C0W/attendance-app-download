@@ -46,6 +46,36 @@ function studentAttendanceRecords(snapshot) {
   return attendanceRecordsFromValue(snapshot.val());
 }
 
+function koreanDay(date) {
+  const days = ['일', '월', '화', '수', '목', '금', '토'];
+  const parts = String(date || '').split('-').map(Number);
+  const parsed = parts.length === 3 ? new Date(parts[0], parts[1] - 1, parts[2]) : new Date('');
+  return Number.isNaN(parsed.getTime()) ? '' : days[parsed.getUTCDay()];
+}
+
+function toMinutes(value) {
+  const match = String(value || '').match(/^(\d{1,2}):(\d{2})/);
+  return match ? Number(match[1]) * 60 + Number(match[2]) : null;
+}
+
+function enrichPersonalAttendance(records, user, timetable) {
+  return records.map(record => {
+    const day = koreanDay(record.date);
+    const recordTime = toMinutes(record.time);
+    const matchedLesson = timetable.find(lesson => {
+      const lessonDay = String(lesson.day || '').trim().replace('요일', '');
+      const start = toMinutes(lesson.startTime);
+      const end = toMinutes(lesson.endTime) ?? (start == null ? null : start + 90);
+      return lessonDay === day && recordTime != null && start != null && end != null && recordTime >= start && recordTime <= end;
+    });
+    return {
+      ...record,
+      studentName: record.studentName || user.name || '이름 없음',
+      subject: record.subject || matchedLesson?.subject || '수업'
+    };
+  });
+}
+
 async function loadAttendancePaths(paths) {
   const snapshots = await Promise.all(paths.map(path => get(ref(db, path))));
   return snapshots.flatMap(flattenAttendance);
@@ -53,16 +83,18 @@ async function loadAttendancePaths(paths) {
 
 async function renderStudent(user) {
   const path = user.isPreStudent ? `preAttendance/${user.preStudentId || user.uid}` : user.isUnregisteredStudent ? `unregisteredAttendance/${user.unregisteredStudentId || user.uid}` : `attendance/${user.uid}`;
-  const records = studentAttendanceRecords(await get(ref(db, path)));
+  const [attendanceSnapshot, timetableSnapshot] = await Promise.all([get(ref(db, path)), get(ref(db, `timetable/${user.uid}`))]);
+  const timetable = Object.values(timetableSnapshot.val() || {});
+  const records = enrichPersonalAttendance(studentAttendanceRecords(attendanceSnapshot), user, timetable);
   content.innerHTML = `<article class="card"><h2>내 출결 기록</h2><p>${escapeHtml(user.grade || '학년 미등록')} · ${escapeHtml(user.className || '반 미등록')}</p><div class="list">${records.length ? attendanceRows(records) : '<p class="empty">출결 기록이 없습니다.</p>'}</div></article>`;
 }
 
 async function renderParent(user) {
   const studentId = user.linkedStudentId;
   if (!studentId) { content.innerHTML = '<article class="card"><h2>학부모 연결 필요</h2><p>관리자에게 학생 연결을 요청하세요.</p></article>'; return; }
-  const [studentSnapshot, attendanceSnapshot] = await Promise.all([get(ref(db, `users/${studentId}`)), get(ref(db, `attendance/${studentId}`))]);
-  const records = studentAttendanceRecords(attendanceSnapshot);
+  const [studentSnapshot, attendanceSnapshot, timetableSnapshot] = await Promise.all([get(ref(db, `users/${studentId}`)), get(ref(db, `attendance/${studentId}`)), get(ref(db, `timetable/${studentId}`))]);
   const student = studentSnapshot.val() || {};
+  const records = enrichPersonalAttendance(studentAttendanceRecords(attendanceSnapshot), student, Object.values(timetableSnapshot.val() || {}));
   content.innerHTML = `<article class="card"><h2>${escapeHtml(student.name || '학생')} 출결</h2><p>${escapeHtml(student.grade || '학년 미등록')} · ${escapeHtml(student.className || '반 미등록')}</p><div class="list">${records.length ? attendanceRows(records) : '<p class="empty">출결 기록이 없습니다.</p>'}</div></article>`;
 }
 
