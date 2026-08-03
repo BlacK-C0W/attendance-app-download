@@ -1,5 +1,7 @@
 package com.example.attendanceappfinal.parent
 
+import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -21,6 +23,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.example.attendanceappfinal.UiConfig
 import com.example.attendanceappfinal.model.Attendance
@@ -30,15 +33,34 @@ import com.google.firebase.database.FirebaseDatabase
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.delay
 
 @Composable
 fun ParentPage(user: User, onLogout: () -> Unit) {
+    val context = LocalContext.current
+    var backPressedOnce by remember { mutableStateOf(false) }
     var child by remember { mutableStateOf<User?>(null) }
     var records by remember { mutableStateOf(emptyList<Attendance>()) }
     var notifications by remember { mutableStateOf(emptyList<Notification>()) }
     var message by remember { mutableStateOf("") }
     val studentId = user.linkedStudentId
     val database = FirebaseDatabase.getInstance()
+
+    BackHandler {
+        if (backPressedOnce) {
+            onLogout()
+        } else {
+            backPressedOnce = true
+            Toast.makeText(context, "뒤로가기를 한 번 더 누르면 로그아웃합니다.", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    LaunchedEffect(backPressedOnce) {
+        if (backPressedOnce) {
+            delay(2_000)
+            backPressedOnce = false
+        }
+    }
 
     fun loadNotifications() {
         if (studentId.isBlank()) return
