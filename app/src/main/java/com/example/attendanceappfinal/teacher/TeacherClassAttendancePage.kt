@@ -13,6 +13,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -53,6 +54,7 @@ fun TeacherClassAttendancePage(
     val reasonMap = remember { mutableStateMapOf<String, String>() }
     var message by remember { mutableStateOf("") }
     var saving by remember { mutableStateOf(false) }
+    var sendParentNotifications by remember { mutableStateOf(false) }
 
     fun isInTimetableClass(grade: String, className: String): Boolean =
         className.trim() == timetable.className.trim() &&
@@ -149,6 +151,9 @@ fun TeacherClassAttendancePage(
             AttendanceRepository.saveAttendance(
                 attendance = attendance,
                 onSuccess = {
+                    if (sendParentNotifications && !student.isPreStudent && !student.isUnregisteredStudent) {
+                        saveParentAttendanceNotification(database, attendance)
+                    }
                     remaining--
                     if (remaining == 0) {
                         saving = false
@@ -195,6 +200,20 @@ fun TeacherClassAttendancePage(
             }
         }
         Spacer(Modifier.height(20.dp))
+        Row(Modifier.fillMaxWidth()) {
+            Checkbox(
+                checked = sendParentNotifications,
+                onCheckedChange = { sendParentNotifications = it }
+            )
+            Column(Modifier.padding(top = 10.dp)) {
+                Text("학부모에게 출결 알림 보내기")
+                Text(
+                    "체크한 경우에만 가입 완료 학생의 학부모 알림함에 저장됩니다.",
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        }
+        Spacer(Modifier.height(8.dp))
         Text("수강 학생 ${students.size}명", style = MaterialTheme.typography.titleLarge)
         Spacer(Modifier.height(8.dp))
 
@@ -244,3 +263,20 @@ fun TeacherClassAttendancePage(
 
 private fun normalizeGrade(value: String): String =
     value.replace(" ", "").replace("학년", "").trim()
+
+private fun saveParentAttendanceNotification(database: FirebaseDatabase, attendance: Attendance) {
+    val ref = database.getReference("parentNotifications").child(attendance.studentUid).push()
+    val status = attendance.status.ifBlank { "출석" }
+    val title = "출결 안내"
+    val message = "${attendance.studentName} 학생이 ${attendance.date} ${attendance.time} ${attendance.subject} 수업에 $status 처리되었습니다."
+    ref.setValue(
+        mapOf(
+            "id" to (ref.key ?: ""),
+            "studentUid" to attendance.studentUid,
+            "title" to title,
+            "message" to message,
+            "timestamp" to System.currentTimeMillis(),
+            "read" to false
+        )
+    )
+}

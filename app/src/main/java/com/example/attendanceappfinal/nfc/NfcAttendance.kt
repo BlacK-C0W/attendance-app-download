@@ -4,6 +4,7 @@ package com.example.attendanceappfinal.nfc
 import com.example.attendanceappfinal.model.Attendance
 import com.google.firebase.database.FirebaseDatabase
 import java.text.SimpleDateFormat
+import java.time.LocalTime
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
@@ -297,7 +298,8 @@ object NfcAttendance {
                                 teacherUid,
                                 teacherName,
                                 timetable.subject,
-                                timetable.startTime
+                                timetable.startTime,
+                                timetable.endTime
 
                             ){ result ->
 
@@ -458,22 +460,16 @@ object NfcAttendance {
 
 
 
-                    if(
-
-                        itemDay == day &&
-
-                        now >= start &&
-
-                        now <= end
-
-                    ){
+                    if (itemDay == day && isNfcAttendanceTime(now, start, end)) {
 
 
                         result = TimetableInfo(
 
                             subject = itemSubject,
 
-                            startTime = start
+                            startTime = start,
+
+                            endTime = end
 
                         )
 
@@ -541,6 +537,8 @@ object NfcAttendance {
         subject:String,
 
         startTime:String,
+
+        endTime:String,
 
         callback:(String)->Unit
 
@@ -868,9 +866,21 @@ object NfcAttendance {
 
         val subject:String,
 
-        val startTime:String
+        val startTime:String,
+
+        val endTime:String = ""
 
     )
+
+    /** NFC is available from 30 minutes before class until the lesson ends. */
+    private fun isNfcAttendanceTime(now: String, start: String, end: String): Boolean = try {
+        val nowTime = LocalTime.parse(now)
+        val startTime = LocalTime.parse(start)
+        val endTime = LocalTime.parse(end)
+        !nowTime.isBefore(startTime.minusMinutes(30)) && nowTime.isBefore(endTime)
+    } catch (_: Exception) {
+        false
+    }
 
 
 
