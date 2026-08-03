@@ -29,6 +29,12 @@ function flattenAttendance(snapshot) {
   return result;
 }
 
+function studentAttendanceRecords(snapshot) {
+  const result = [];
+  snapshot.forEach(record => result.push({ id: record.key, ...record.val() }));
+  return result;
+}
+
 async function loadAttendancePaths(paths) {
   const snapshots = await Promise.all(paths.map(path => get(ref(db, path))));
   return snapshots.flatMap(flattenAttendance);
@@ -36,14 +42,15 @@ async function loadAttendancePaths(paths) {
 
 async function renderStudent(user) {
   const path = user.isPreStudent ? `preAttendance/${user.preStudentId || user.uid}` : user.isUnregisteredStudent ? `unregisteredAttendance/${user.unregisteredStudentId || user.uid}` : `attendance/${user.uid}`;
-  const records = flattenAttendance(await get(ref(db, path)));
+  const records = studentAttendanceRecords(await get(ref(db, path)));
   content.innerHTML = `<article class="card"><h2>내 출결 기록</h2><p>${escapeHtml(user.grade || '학년 미등록')} · ${escapeHtml(user.className || '반 미등록')}</p><div class="list">${records.length ? attendanceRows(records) : '<p class="empty">출결 기록이 없습니다.</p>'}</div></article>`;
 }
 
 async function renderParent(user) {
   const studentId = user.linkedStudentId;
   if (!studentId) { content.innerHTML = '<article class="card"><h2>학부모 연결 필요</h2><p>관리자에게 학생 연결을 요청하세요.</p></article>'; return; }
-  const [studentSnapshot, records] = await Promise.all([get(ref(db, `users/${studentId}`)), loadAttendancePaths([`attendance/${studentId}`])]);
+  const [studentSnapshot, attendanceSnapshot] = await Promise.all([get(ref(db, `users/${studentId}`)), get(ref(db, `attendance/${studentId}`))]);
+  const records = studentAttendanceRecords(attendanceSnapshot);
   const student = studentSnapshot.val() || {};
   content.innerHTML = `<article class="card"><h2>${escapeHtml(student.name || '학생')} 출결</h2><p>${escapeHtml(student.grade || '학년 미등록')} · ${escapeHtml(student.className || '반 미등록')}</p><div class="list">${records.length ? attendanceRows(records) : '<p class="empty">출결 기록이 없습니다.</p>'}</div></article>`;
 }
