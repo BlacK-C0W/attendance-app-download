@@ -11,9 +11,20 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.attendanceappfinal.UiConfig
 import com.example.attendanceappfinal.model.Attendance
+import com.example.attendanceappfinal.model.PreStudent
+import com.example.attendanceappfinal.model.UnregisteredStudent
 import com.example.attendanceappfinal.model.User
 import com.google.firebase.database.FirebaseDatabase
 import java.time.LocalDate
+
+private fun normalizeAttendanceDate(value: String): String {
+    val parts = value.trim().split("-")
+    if (parts.size != 3) return value.trim()
+    val year = parts[0].toIntOrNull() ?: return value.trim()
+    val month = parts[1].toIntOrNull() ?: return value.trim()
+    val day = parts[2].toIntOrNull() ?: return value.trim()
+    return runCatching { LocalDate.of(year, month, day).toString() }.getOrDefault(value.trim())
+}
 
 
 
@@ -135,7 +146,43 @@ fun AdminAttendanceAllPage(
 
 
 
-                userMap = result
+                database.getReference("preStudents").get().addOnSuccessListener { preSnapshot ->
+                    preSnapshot.children.forEach { child ->
+                        child.getValue(PreStudent::class.java)?.let { student ->
+                            val id = child.key ?: student.id
+                            val user = User(
+                                uid = id,
+                                name = student.name,
+                                phone = student.phone,
+                                grade = student.grade,
+                                className = student.className,
+                                isPreStudent = true,
+                                preStudentId = id
+                            )
+                            result[id] = user
+                            result["pre_$id"] = user
+                        }
+                    }
+                    database.getReference("unregisteredStudents").get().addOnSuccessListener { unregisteredSnapshot ->
+                        unregisteredSnapshot.children.forEach { child ->
+                            child.getValue(UnregisteredStudent::class.java)?.let { student ->
+                                val id = child.key ?: student.id
+                                val user = User(
+                                    uid = id,
+                                    name = student.name,
+                                    phone = student.phone,
+                                    grade = student.grade,
+                                    className = student.className,
+                                    isUnregisteredStudent = true,
+                                    unregisteredStudentId = id
+                                )
+                                result[id] = user
+                                result["un_$id"] = user
+                            }
+                        }
+                        userMap = result
+                    }.addOnFailureListener { userMap = result }
+                }.addOnFailureListener { userMap = result }
 
 
 
@@ -229,12 +276,42 @@ fun AdminAttendanceAllPage(
 
 
 
+    fun loadAllAttendance(){
+        val result = mutableListOf<Attendance>()
+        val paths = listOf("attendance", "preAttendance", "unregisteredAttendance")
+        var completed = 0
+
+        paths.forEach { path ->
+            database.getReference(path).get()
+                .addOnSuccessListener { snapshot ->
+                    snapshot.children.forEach { studentNode ->
+                        studentNode.children.forEach { record ->
+                            record.getValue(Attendance::class.java)?.let { attendance ->
+                                result.add(
+                                    attendance.copy(
+                                        id = record.key ?: attendance.id,
+                                        date = normalizeAttendanceDate(attendance.date)
+                                    )
+                                )
+                            }
+                        }
+                    }
+                }
+                .addOnCompleteListener {
+                    completed++
+                    if (completed == paths.size) {
+                        attendanceList = result.sortedByDescending { it.timestamp }
+                    }
+                }
+        }
+    }
+
     LaunchedEffect(Unit){
 
 
         loadUsers()
 
-        loadAttendance()
+        loadAllAttendance()
 
 
     }

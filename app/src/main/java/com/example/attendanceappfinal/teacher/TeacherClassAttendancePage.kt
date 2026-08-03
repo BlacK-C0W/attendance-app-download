@@ -54,16 +54,20 @@ fun TeacherClassAttendancePage(
     var message by remember { mutableStateOf("") }
     var saving by remember { mutableStateOf(false) }
 
+    fun isInTimetableClass(grade: String, className: String): Boolean =
+        className.trim() == timetable.className.trim() &&
+            (timetable.grade.isBlank() || normalizeGrade(grade) == normalizeGrade(timetable.grade))
+
     fun loadStudents() {
         database.getReference("users").get().addOnSuccessListener { userSnapshot ->
             val registered = userSnapshot.children.mapNotNull { child ->
                 child.getValue(User::class.java)?.copy(uid = child.key ?: "")
-            }.filter { it.role == "student" && it.className == timetable.className }
+            }.filter { it.role == "student" && isInTimetableClass(it.grade, it.className) }
 
             database.getReference("preStudents").get().addOnSuccessListener { preSnapshot ->
                 val preStudents = preSnapshot.children.mapNotNull { child ->
                     child.getValue(PreStudent::class.java)?.copy(id = child.key ?: "")
-                }.filter { it.className == timetable.className }
+                }.filter { isInTimetableClass(it.grade, it.className) }
                     .map {
                         User(
                             uid = "pre_${it.id}", name = it.name, phone = it.phone,
@@ -75,7 +79,7 @@ fun TeacherClassAttendancePage(
             database.getReference("unregisteredStudents").get().addOnSuccessListener { unregisteredSnapshot ->
                 val unregistered = unregisteredSnapshot.children.mapNotNull { child ->
                     child.getValue(UnregisteredStudent::class.java)?.copy(id = child.key ?: "")
-                }.filter { it.className == timetable.className }
+                }.filter { isInTimetableClass(it.grade, it.className) }
                     .map {
                         User(
                             uid = "un_${it.id}",
@@ -89,7 +93,9 @@ fun TeacherClassAttendancePage(
                         )
                     }
 
-                students = (registered + preStudents + unregistered).sortedBy { it.name }
+                students = (registered + preStudents + unregistered)
+                    .filter { isInTimetableClass(it.grade, it.className) }
+                    .sortedBy { it.name }
                 students.forEach { student ->
                     if (statusMap[student.uid] == null) statusMap[student.uid] = "출석"
                 }
@@ -102,7 +108,7 @@ fun TeacherClassAttendancePage(
                 database.getReference("unregisteredStudents").get().addOnSuccessListener { unregisteredSnapshot ->
                     val unregistered = unregisteredSnapshot.children.mapNotNull { child ->
                         child.getValue(UnregisteredStudent::class.java)?.copy(id = child.key ?: "")
-                    }.filter { it.className == timetable.className }.map {
+                    }.filter { isInTimetableClass(it.grade, it.className) }.map {
                         User(uid = "un_${it.id}", name = it.name, phone = it.phone, grade = it.grade,
                             className = it.className, role = "student", isUnregisteredStudent = true,
                             unregisteredStudentId = it.id)
@@ -162,7 +168,16 @@ fun TeacherClassAttendancePage(
         }
     }
 
-    LaunchedEffect(timetable.id) { loadStudents() }
+    LaunchedEffect(timetable.id, timetable.grade, timetable.className) {
+        // A single composable instance is reused when the teacher opens another
+        // lesson. Clear the previous class immediately so stale students can
+        // never be submitted or shown for the newly selected timetable.
+        students = emptyList()
+        statusMap.clear()
+        reasonMap.clear()
+        message = ""
+        loadStudents()
+    }
 
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(
@@ -174,7 +189,7 @@ fun TeacherClassAttendancePage(
         Spacer(Modifier.height(12.dp))
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp)) {
-                Text("${timetable.className} · ${timetable.subject}", style = MaterialTheme.typography.titleLarge)
+                Text("${timetable.grade.ifBlank { "학년 미지정" }} ${timetable.className} · ${timetable.subject}", style = MaterialTheme.typography.titleLarge)
                 Text("${timetable.day} ${timetable.startTime} ~ ${timetable.endTime}")
                 Text("가입 완료 학생과 앱 미사용 학생을 함께 표시합니다.", style = MaterialTheme.typography.bodySmall)
             }
@@ -187,7 +202,10 @@ fun TeacherClassAttendancePage(
             Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
                 Column(Modifier.padding(14.dp)) {
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Column { Text(student.name.ifBlank { "이름 없음" }, style = MaterialTheme.typography.titleMedium); Text(student.grade, style = MaterialTheme.typography.bodySmall) }
+                        Column {
+                            Text(student.name.ifBlank { "이름 없음" }, style = MaterialTheme.typography.titleMedium)
+                            Text("${student.grade} · ${student.className}", style = MaterialTheme.typography.bodySmall)
+                        }
                         StudentTypeBadge(student)
                     }
                     Spacer(Modifier.height(8.dp))
@@ -223,3 +241,6 @@ fun TeacherClassAttendancePage(
         OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = onBack) { Text("시간표로 돌아가기") }
     }
 }
+
+private fun normalizeGrade(value: String): String =
+    value.replace(" ", "").replace("학년", "").trim()

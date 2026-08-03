@@ -370,7 +370,7 @@ fun TeacherCurrentClassPage(
 
 
                         Text(
-                            "${item.className} ${item.subject}",
+                            "${item.grade.ifBlank { "학년 미지정" }} ${item.className} ${item.subject}",
                             style =
                                 MaterialTheme.typography.titleLarge
                         )
@@ -629,6 +629,9 @@ private fun loadStudents(
     val targetClass =
         timetableList.first().className
 
+    val targetGrade =
+        timetableList.first().grade
+
 
 
 
@@ -667,7 +670,11 @@ private fun loadStudents(
                 if(
                     user != null
                     &&
-                    user.className == targetClass
+                    user.className.trim() == targetClass.trim()
+
+                    &&
+
+                    (targetGrade.isBlank() || normalizeCurrentGrade(user.grade) == normalizeCurrentGrade(targetGrade))
                     &&
                     user.role == "student"
                 ){
@@ -690,3 +697,6 @@ private fun loadStudents(
 
 
 }
+
+private fun normalizeCurrentGrade(value: String): String =
+    value.replace(" ", "").replace("학년", "").trim()

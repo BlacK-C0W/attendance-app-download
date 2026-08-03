@@ -748,6 +748,8 @@ fun TeacherTimetablePage(
 
                     teacherUid = teacherUid,
 
+                    grade = student.grade,
+
                     className =
                         student.className,
 
@@ -766,6 +768,8 @@ fun TeacherTimetablePage(
                 ref.setValue(data)
 
                     .addOnSuccessListener {
+
+                        syncStudentScheduleToTeacherTimetable(database, data)
 
 
 
@@ -987,6 +991,31 @@ fun TeacherTimetablePage(
 
 
 
+
+private fun syncStudentScheduleToTeacherTimetable(
+    database: FirebaseDatabase,
+    studentSchedule: Timetable
+) {
+    if (studentSchedule.teacherUid.isBlank()) return
+
+    val teacherSchedules = database.getReference("teacherTimetable").child(studentSchedule.teacherUid)
+    teacherSchedules.get().addOnSuccessListener { snapshot ->
+        val alreadyRegistered = snapshot.children.any { child ->
+            child.getValue(Timetable::class.java)?.let { schedule ->
+                schedule.day == studentSchedule.day &&
+                    schedule.grade == studentSchedule.grade &&
+                    schedule.className == studentSchedule.className &&
+                    schedule.subject == studentSchedule.subject &&
+                    schedule.startTime == studentSchedule.startTime &&
+                    schedule.endTime == studentSchedule.endTime
+            } == true
+        }
+        if (!alreadyRegistered) {
+            val ref = teacherSchedules.push()
+            ref.setValue(studentSchedule.copy(id = ref.key ?: ""))
+        }
+    }
+}
 
 fun deleteTimetable(
 

@@ -12,6 +12,8 @@ data class Timetable(
 
     val teacherUid:String="",
 
+    val grade:String="",
+
     val className:String="",
 
     val startTime:String="",

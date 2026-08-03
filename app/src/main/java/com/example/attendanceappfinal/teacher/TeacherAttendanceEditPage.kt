@@ -17,6 +17,7 @@ import com.example.attendanceappfinal.model.AttendanceLog
 import com.example.attendanceappfinal.model.Notification
 import com.example.attendanceappfinal.model.User
 import com.example.attendanceappfinal.repository.NotificationRepository
+import com.example.attendanceappfinal.repository.attendanceStoragePath
 import com.google.firebase.database.FirebaseDatabase
 import java.text.SimpleDateFormat
 import java.util.*
@@ -116,7 +117,7 @@ fun TeacherAttendanceEditPage(
 
 
 
-    fun load(){
+    fun loadLegacy(){
 
 
 
@@ -344,6 +345,46 @@ fun TeacherAttendanceEditPage(
 
 
 
+
+    fun load() {
+        val list = mutableListOf<Attendance>()
+
+        fun appendRecords(rootSnapshot: com.google.firebase.database.DataSnapshot, prefix: String) {
+            rootSnapshot.children.forEach { studentNode ->
+                val storageId = studentNode.key ?: ""
+                studentNode.children.forEach { item ->
+                    item.getValue(Attendance::class.java)?.let { data ->
+                        list.add(
+                            data.copy(
+                                id = item.key ?: "",
+                                studentUid = data.studentUid.ifBlank { "$prefix$storageId" },
+                                studentName = data.studentName.ifBlank { "이름 없음" }
+                            )
+                        )
+                    }
+                }
+            }
+        }
+
+        fun finish() {
+            attendanceList = list.sortedByDescending { it.timestamp }
+            if (attendanceList.isEmpty()) message = "출결 기록이 없습니다."
+        }
+
+        database.getReference("attendance").get().addOnSuccessListener { registered ->
+            appendRecords(registered, "")
+            database.getReference("preAttendance").get().addOnSuccessListener { pre ->
+                appendRecords(pre, "pre_")
+                database.getReference("unregisteredAttendance").get().addOnSuccessListener { unregistered ->
+                    appendRecords(unregistered, "un_")
+                    finish()
+                }.addOnFailureListener { finish() }
+            }.addOnFailureListener { finish() }
+        }.addOnFailureListener {
+            message = "출결 기록을 불러오지 못했습니다: ${it.message ?: "권한 또는 네트워크 오류"}"
+            finish()
+        }
+    }
 
     LaunchedEffect(Unit){
 
@@ -1181,11 +1222,13 @@ private fun updateAttendance(
 
 
 
+    val storagePath = attendanceStoragePath(attendance.studentUid)
+
     database
 
-        .getReference("attendance")
+        .getReference(storagePath.root)
 
-        .child(attendance.studentUid)
+        .child(storagePath.studentId)
 
         .child(attendance.id)
 
@@ -1391,11 +1434,13 @@ private fun deleteAttendance(
 
 ){
 
+    val storagePath = attendanceStoragePath(attendance.studentUid)
+
     database
 
-        .getReference("attendance")
+        .getReference(storagePath.root)
 
-        .child(attendance.studentUid)
+        .child(storagePath.studentId)
 
         .child(attendance.id)
 

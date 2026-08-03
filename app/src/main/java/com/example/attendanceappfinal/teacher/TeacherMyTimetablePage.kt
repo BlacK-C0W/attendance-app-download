@@ -11,7 +11,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.attendanceappfinal.UiConfig
 import com.example.attendanceappfinal.model.Timetable
+import com.example.attendanceappfinal.model.User
 import com.google.firebase.database.FirebaseDatabase
+import java.time.DayOfWeek
+import java.time.LocalDate
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 
@@ -81,6 +84,10 @@ fun TeacherMyTimetablePage(
         mutableStateOf("월")
     }
 
+    var selectedGrade by remember {
+        mutableStateOf("")
+    }
+
 
     var selectedClass by remember {
         mutableStateOf("A반")
@@ -113,6 +120,30 @@ fun TeacherMyTimetablePage(
         mutableStateOf(emptyList<Timetable>())
     }
 
+    var editingTimetable by remember {
+        mutableStateOf<Timetable?>(null)
+    }
+
+    var viewingDay by remember {
+        mutableStateOf("전체")
+    }
+
+
+    var currentCandidates by remember {
+        mutableStateOf(emptyList<Timetable>())
+    }
+
+    var timetableLoaded by remember {
+        mutableStateOf(false)
+    }
+
+    var currentSelectionTitle by remember {
+        mutableStateOf("")
+    }
+
+    var currentSelectionDescription by remember {
+        mutableStateOf("")
+    }
 
     var message by remember {
         mutableStateOf("")
@@ -122,12 +153,20 @@ fun TeacherMyTimetablePage(
 
     var subjects by remember { mutableStateOf(defaultSubjects) }
 
+    var gradesByClass by remember { mutableStateOf<Map<String, List<String>>>(emptyMap()) }
+
+    var registeredStudents by remember { mutableStateOf(emptyList<User>()) }
+
+    var importingStudentSchedules by remember { mutableStateOf(false) }
+
 
 
 
 
 
     fun load(){
+
+        timetableLoaded = false
 
 
         database
@@ -178,6 +217,15 @@ fun TeacherMyTimetablePage(
 
                     }
 
+                timetableLoaded = true
+
+            }
+
+            .addOnFailureListener {
+
+                timetableLoaded = true
+
+                message = "등록된 수업을 불러오지 못했습니다: ${it.message ?: "권한 또는 네트워크 오류"}"
 
             }
 
@@ -201,6 +249,58 @@ fun TeacherMyTimetablePage(
                 .takeIf { it.isNotEmpty() }?.let { subjects = it }
         }
 
+        database.getReference("users").get().addOnSuccessListener { snapshot ->
+            val students = snapshot.children.mapNotNull { child ->
+                child.getValue(User::class.java)?.copy(uid = child.key ?: "")
+            }.filter { it.role == "student" && it.grade.isNotBlank() && it.className.isNotBlank() }
+            registeredStudents = students
+            gradesByClass = students.groupBy { it.className }
+                .mapValues { (_, students) -> students.map { it.grade }.distinct().sorted() }
+        }
+
+    }
+
+    fun importStudentSchedules(){
+        if (registeredStudents.isEmpty()) {
+            message = "가져올 가입 완료 학생이 없습니다."
+            return
+        }
+        importingStudentSchedules = true
+        var completed = 0
+        var imported = 0
+        var failed = false
+        val total = registeredStudents.size
+        registeredStudents.forEach { student ->
+            database.getReference("timetable").child(student.uid).get()
+                .addOnSuccessListener { snapshot ->
+                    snapshot.children.mapNotNull { it.getValue(Timetable::class.java) }
+                        .filter { it.teacherUid == teacherUid }
+                        .forEach { schedule ->
+                            val key = "legacy_${schedule.day}_${schedule.grade}_${schedule.className}_${schedule.subject}_${schedule.startTime}_${schedule.endTime}"
+                                .replace(".", "_")
+                            database.getReference("teacherTimetable").child(teacherUid).child(key)
+                                .setValue(schedule.copy(id = key))
+                            imported++
+                        }
+                }
+                .addOnFailureListener {
+                    failed = true
+                }
+                .addOnCompleteListener {
+                    completed++
+                    if (completed == total) {
+                        importingStudentSchedules = false
+                        message = if (imported > 0) {
+                            "학생별 시간표 ${imported}건을 내 시간표에 반영했습니다."
+                        } else if (failed) {
+                            "학생별 시간표를 읽지 못했습니다. Firebase timetable 읽기 권한을 확인하세요."
+                        } else {
+                            "현재 선생님으로 등록된 학생별 시간표가 없습니다."
+                        }
+                        load()
+                    }
+                }
+        }
     }
 
 
@@ -263,22 +363,48 @@ fun TeacherMyTimetablePage(
 
             onClick = {
 
-                val formatter = DateTimeFormatter.ofPattern("HH:mm")
+                if (!timetableLoaded) {
+                    message = "시간표를 불러오는 중입니다. 잠시 후 다시 눌러주세요."
+                    return@Button
+                }
+
                 val now = LocalTime.now()
-                val current = list.firstOrNull { item ->
+                val today = teacherTodayDay()
+                val current = list.filter { item ->
                     try {
-                        val start = LocalTime.parse(item.startTime, formatter)
-                        val end = LocalTime.parse(item.endTime, formatter)
-                        !now.isBefore(start) && !now.isAfter(end)
+                        val start = parseTeacherTime(item.startTime) ?: return@filter false
+                        val end = parseTeacherTime(item.endTime) ?: start.plusMinutes(90)
+                        isSameTeacherDay(item.day, today) &&
+                            !now.isBefore(start) && !now.isAfter(end)
                     } catch (_: Exception) {
                         false
                     }
                 }
-                if (current != null) {
-                    onClassOpen(current)
-                } else {
-                    message = "현재 진행 중인 수업이 없습니다. 아래 시간표에서 수업을 선택할 수 있습니다."
+
+                when (current.size) {
+                    1 -> onClassOpen(current.first())
+                    0 -> {
+                        val todayLessons = list.filter { isSameTeacherDay(it.day, today) }
+                        val fallbackLessons = if (todayLessons.isNotEmpty()) todayLessons else list
+                        if (fallbackLessons.isEmpty()) {
+                            message = "등록된 수업이 없습니다. 내 시간표에서 수업을 먼저 등록하세요."
+                        } else {
+                            currentSelectionTitle = if (todayLessons.isNotEmpty()) "오늘 수업 선택" else "등록 수업 선택"
+                            currentSelectionDescription = if (todayLessons.isNotEmpty()) {
+                                "현재 시간에 맞는 수업을 찾지 못했습니다. 출결을 관리할 반을 선택하세요."
+                            } else {
+                                "오늘 요일에 등록된 수업이 없어 전체 등록 수업을 보여줍니다. 출결을 관리할 반을 선택하세요."
+                            }
+                            currentCandidates = fallbackLessons
+                        }
+                    }
+                    else -> {
+                        currentSelectionTitle = "현재 수업 선택"
+                        currentSelectionDescription = "현재 시간에 진행 중인 수업이 여러 개입니다. 출결을 관리할 수업을 선택하세요."
+                        currentCandidates = current
+                    }
                 }
+                return@Button
 
             }
 
@@ -288,6 +414,14 @@ fun TeacherMyTimetablePage(
                 "현재 수업 확인"
             )
 
+        }
+
+        OutlinedButton(
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !importingStudentSchedules,
+            onClick = { importStudentSchedules() }
+        ) {
+            Text(if (importingStudentSchedules) "학생별 시간표 가져오는 중..." else "학생별 시간표 가져오기")
         }
 
 
@@ -398,6 +532,26 @@ fun TeacherMyTimetablePage(
 
 
 
+
+        OutlinedTextField(
+            value = selectedGrade,
+            onValueChange = { selectedGrade = it },
+            label = { Text("학년") },
+            placeholder = { Text("예: 중1, 고2") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        gradesByClass[selectedClass].orEmpty().takeIf { it.isNotEmpty() }?.let { candidates ->
+            Text(
+                "${selectedClass} 등록 학생 학년: ${candidates.joinToString(", ")}",
+                style = MaterialTheme.typography.bodySmall
+            )
+        }
+
+        Spacer(
+            Modifier.height(15.dp)
+        )
 
         Box {
 
@@ -606,6 +760,11 @@ fun TeacherMyTimetablePage(
 
             onClick = {
 
+                if (selectedGrade.isBlank() || subject.isBlank() || startTime.isBlank() || endTime.isBlank()) {
+                    message = "학년, 과목, 시작 시간을 모두 입력하세요."
+                    return@Button
+                }
+
 
 
                 val ref =
@@ -644,6 +803,10 @@ fun TeacherMyTimetablePage(
                             teacherUid,
 
 
+                        grade =
+                            selectedGrade.trim(),
+
+
                         className =
                             selectedClass,
 
@@ -680,6 +843,12 @@ fun TeacherMyTimetablePage(
 
                         load()
 
+
+                    }
+
+                    .addOnFailureListener {
+
+                        message = "수업 등록에 실패했습니다: ${it.message ?: "권한 또는 네트워크 오류"}"
 
                     }
 
@@ -736,7 +905,38 @@ fun TeacherMyTimetablePage(
 
 
 
-        list.forEach { item ->
+        Text("요일별 보기", style = MaterialTheme.typography.titleMedium)
+
+        (listOf("전체") + days).chunked(4).forEach { dayRow ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                dayRow.forEach { day ->
+                    Button(
+                        modifier = Modifier.weight(1f),
+                        onClick = { viewingDay = day },
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = if (viewingDay == day) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                            contentColor = if (viewingDay == day) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    ) { Text(day) }
+                }
+                repeat(4 - dayRow.size) { Spacer(Modifier.weight(1f)) }
+            }
+            Spacer(Modifier.height(6.dp))
+        }
+
+        val visibleTimetables = if (viewingDay == "전체") list else list.filter { it.day == viewingDay }
+        if (visibleTimetables.isEmpty()) {
+            Text("${viewingDay}요일에 등록된 수업이 없습니다.")
+        }
+
+        visibleTimetables.forEach { item ->
+
+            var legacyGrade by remember(item.id, gradesByClass) {
+                mutableStateOf(item.grade.ifBlank { gradesByClass[item.className]?.singleOrNull().orEmpty() })
+            }
 
 
 
@@ -772,9 +972,41 @@ fun TeacherMyTimetablePage(
 
                     Text(
 
-                        "${item.className} ${item.subject}"
+                        "${item.grade.ifBlank { "학년 미지정" }} ${item.className} ${item.subject}"
 
                     )
+
+                    run {
+                        val candidates = gradesByClass[item.className].orEmpty()
+                        Spacer(Modifier.height(8.dp))
+                        Text("대상 학년을 학생 정보와 같게 확인해 주세요.", style = MaterialTheme.typography.bodySmall)
+                        if (candidates.isNotEmpty()) {
+                            Text("등록된 학생 학년: ${candidates.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
+                        }
+                        OutlinedTextField(
+                            value = legacyGrade,
+                            onValueChange = { legacyGrade = it },
+                            label = { Text("대상 학년") },
+                            placeholder = { Text("예: 중1, 고2") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Button(
+                            enabled = legacyGrade.isNotBlank(),
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                database.getReference("teacherTimetable").child(teacherUid).child(item.id)
+                                    .child("grade").setValue(legacyGrade.trim())
+                                    .addOnSuccessListener {
+                                        message = "${item.className} 수업을 ${legacyGrade.trim()}로 지정했습니다."
+                                        load()
+                                    }
+                                    .addOnFailureListener {
+                                        message = "학년 지정에 실패했습니다: ${it.message ?: "권한 또는 네트워크 오류"}"
+                                    }
+                            }
+                        ) { Text("이 학년으로 저장") }
+                    }
 
                     Spacer(Modifier.height(10.dp))
 
@@ -790,6 +1022,21 @@ fun TeacherMyTimetablePage(
 
                     }
 
+
+
+
+
+                    OutlinedButton(
+
+                        modifier = Modifier.fillMaxWidth(),
+
+                        onClick = { editingTimetable = item }
+
+                    ){
+
+                        Text("수업 수정")
+
+                    }
 
 
 
@@ -836,6 +1083,70 @@ fun TeacherMyTimetablePage(
 
         }
 
+        if (currentCandidates.isNotEmpty()) {
+            AlertDialog(
+                onDismissRequest = {
+                    currentCandidates = emptyList()
+                    currentSelectionTitle = ""
+                    currentSelectionDescription = ""
+                },
+                title = { Text(currentSelectionTitle.ifBlank { "수업 선택" }) },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(currentSelectionDescription)
+                        currentCandidates.forEach { item ->
+                            OutlinedButton(
+                                modifier = Modifier.fillMaxWidth(),
+                                onClick = {
+                                    currentCandidates = emptyList()
+                                    currentSelectionTitle = ""
+                                    currentSelectionDescription = ""
+                                    onClassOpen(item)
+                                }
+                            ) {
+                                Text("${item.grade} ${item.className} · ${item.subject} (${item.startTime}~${item.endTime})")
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        currentCandidates = emptyList()
+                        currentSelectionTitle = ""
+                        currentSelectionDescription = ""
+                    }) { Text("취소") }
+                }
+            )
+        }
+
+        editingTimetable?.let { item ->
+            TeacherTimetableEditDialog(
+                timetable = item,
+                onDismiss = { editingTimetable = null },
+                onSave = { updated ->
+                    database.getReference("teacherTimetable").child(teacherUid).child(item.id)
+                        .updateChildren(
+                            mapOf(
+                                "day" to updated.day,
+                                "grade" to updated.grade,
+                                "className" to updated.className,
+                                "subject" to updated.subject,
+                                "startTime" to updated.startTime,
+                                "endTime" to updated.endTime
+                            )
+                        )
+                        .addOnSuccessListener {
+                            message = "수업 시간표를 수정했습니다."
+                            editingTimetable = null
+                            load()
+                        }
+                        .addOnFailureListener {
+                            message = "수업 수정에 실패했습니다: ${it.message ?: "권한 또는 네트워크 오류"}"
+                        }
+                }
+            )
+        }
+
 
 
 
@@ -877,4 +1188,86 @@ fun TeacherMyTimetablePage(
 
 
 
+}
+
+private fun teacherTodayDay(): String = when (LocalDate.now().dayOfWeek) {
+    DayOfWeek.MONDAY -> "월"
+    DayOfWeek.TUESDAY -> "화"
+    DayOfWeek.WEDNESDAY -> "수"
+    DayOfWeek.THURSDAY -> "목"
+    DayOfWeek.FRIDAY -> "금"
+    DayOfWeek.SATURDAY -> "토"
+    DayOfWeek.SUNDAY -> "일"
+}
+
+private fun isSameTeacherDay(timetableDay: String, today: String): Boolean {
+    val normalized = timetableDay.trim()
+    return normalized == today || normalized == "${today}요일"
+}
+
+private fun parseTeacherTime(value: String): LocalTime? {
+    val normalized = value.trim()
+    val formats = listOf(
+        DateTimeFormatter.ofPattern("HH:mm"),
+        DateTimeFormatter.ofPattern("H:mm")
+    )
+    return formats.firstNotNullOfOrNull { format ->
+        runCatching { LocalTime.parse(normalized, format) }.getOrNull()
+    }
+}
+
+@Composable
+private fun TeacherTimetableEditDialog(
+    timetable: Timetable,
+    onDismiss: () -> Unit,
+    onSave: (Timetable) -> Unit
+) {
+    var day by remember(timetable.id) { mutableStateOf(timetable.day) }
+    var grade by remember(timetable.id) { mutableStateOf(timetable.grade) }
+    var className by remember(timetable.id) { mutableStateOf(timetable.className) }
+    var subject by remember(timetable.id) { mutableStateOf(timetable.subject) }
+    var startTime by remember(timetable.id) { mutableStateOf(timetable.startTime) }
+    var endTime by remember(timetable.id) { mutableStateOf(timetable.endTime) }
+    var error by remember { mutableStateOf("") }
+    val days = setOf("월", "화", "수", "목", "금", "토", "일")
+    val timeRegex = Regex("^([01]\\d|2[0-3]):[0-5]\\d$")
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("수업 시간표 수정") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(day, { day = it }, Modifier.fillMaxWidth(), label = { Text("요일 (월~일)") }, singleLine = true)
+                OutlinedTextField(grade, { grade = it }, Modifier.fillMaxWidth(), label = { Text("학년") }, singleLine = true)
+                OutlinedTextField(className, { className = it }, Modifier.fillMaxWidth(), label = { Text("반") }, singleLine = true)
+                OutlinedTextField(subject, { subject = it }, Modifier.fillMaxWidth(), label = { Text("과목") }, singleLine = true)
+                OutlinedTextField(
+                    startTime,
+                    {
+                        startTime = it
+                        endTime = try {
+                            LocalTime.parse(it, DateTimeFormatter.ofPattern("HH:mm"))
+                                .plusMinutes(90).format(DateTimeFormatter.ofPattern("HH:mm"))
+                        } catch (_: Exception) { "" }
+                    },
+                    Modifier.fillMaxWidth(), label = { Text("시작 시간") }, singleLine = true
+                )
+                OutlinedTextField(endTime, {}, Modifier.fillMaxWidth(), enabled = false, label = { Text("종료 시간 (자동)") }, singleLine = true)
+                if (error.isNotBlank()) Text(error, color = MaterialTheme.colorScheme.error)
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                if (day.trim() !in days || grade.isBlank() || className.isBlank() || subject.isBlank() || !startTime.matches(timeRegex)) {
+                    error = "요일, 학년, 반, 과목과 HH:mm 형식의 시작 시간을 확인하세요."
+                    return@Button
+                }
+                onSave(timetable.copy(
+                    day = day.trim(), grade = grade.trim(), className = className.trim(),
+                    subject = subject.trim(), startTime = startTime, endTime = endTime
+                ))
+            }) { Text("저장") }
+        },
+        dismissButton = { OutlinedButton(onClick = onDismiss) { Text("취소") } }
+    )
 }

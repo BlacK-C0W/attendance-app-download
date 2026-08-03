@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.dp
 import com.example.attendanceappfinal.UiConfig
 import com.example.attendanceappfinal.model.Attendance
 import com.example.attendanceappfinal.model.User
+import com.example.attendanceappfinal.repository.attendanceStoragePath
 import com.google.firebase.database.FirebaseDatabase
 import java.util.Calendar
 
@@ -79,9 +80,11 @@ fun AdminStudentAttendanceDetailPage(
 
     fun loadAttendance(){
 
+        val storagePath = attendanceStoragePath(student.uid)
+
         database
-            .getReference("attendance")
-            .child(student.uid)
+            .getReference(storagePath.root)
+            .child(storagePath.studentId)
             .get()
             .addOnSuccessListener { snapshot ->
 
@@ -109,7 +112,7 @@ fun AdminStudentAttendanceDetailPage(
 
                                 id = record.key ?: "",
 
-                                studentUid = student.uid
+                                studentUid = attendance.studentUid.ifBlank { student.uid }
 
                             )
 
@@ -149,6 +152,12 @@ fun AdminStudentAttendanceDetailPage(
                 }
                 attendanceList = result
 
+
+            }
+
+            .addOnFailureListener {
+
+                attendanceList = emptyList()
 
             }
 

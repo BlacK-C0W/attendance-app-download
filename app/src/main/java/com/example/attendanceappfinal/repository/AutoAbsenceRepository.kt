@@ -121,7 +121,7 @@ object AutoAbsenceRepository {
     }
 
     private fun lessonKey(timetable: Timetable, date: String): String =
-        "$date|${timetable.id}|${timetable.className}|${timetable.subject}|${timetable.startTime}|${timetable.endTime}"
+        "$date|${timetable.id}|${timetable.grade}|${timetable.className}|${timetable.subject}|${timetable.startTime}|${timetable.endTime}"
 
     private fun loadAllStudents(onLoaded: (List<User>) -> Unit) {
         if (cachedStudents.isNotEmpty() && System.currentTimeMillis() - studentCacheUpdatedAt < STUDENT_CACHE_TTL_MS) {
@@ -159,7 +159,10 @@ object AutoAbsenceRepository {
     }
 
     private fun createAbsencesForClass(timetable: Timetable, allStudents: List<User>, now: LocalDateTime, onCompleted: (Int) -> Unit) {
-        val students = allStudents.filter { it.className == timetable.className }
+        val students = allStudents.filter {
+            it.className.trim() == timetable.className.trim() &&
+                (timetable.grade.isBlank() || normalizeGrade(it.grade) == normalizeGrade(timetable.grade))
+        }
         if (students.isEmpty()) return onCompleted(0)
         var remaining = students.size
         var created = 0
@@ -280,3 +283,6 @@ object AutoAbsenceRepository {
         !now.isBefore(LocalTime.parse(timetable.endTime, timeFormatter))
     } catch (_: Exception) { false }
 }
+
+private fun normalizeGrade(value: String): String =
+    value.replace(" ", "").replace("학년", "").trim()
