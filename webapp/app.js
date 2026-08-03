@@ -16,6 +16,7 @@ const loginView = document.querySelector('#login-view');
 const appView = document.querySelector('#app-view');
 const content = document.querySelector('#content');
 const loginError = document.querySelector('#login-error');
+const loginHint = document.querySelector('#login-hint');
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
 const statusClass = status => status === '결석' ? 'absent' : status === '지각' ? 'late' : '';
@@ -117,8 +118,18 @@ document.querySelector('#login-form').addEventListener('submit', async event => 
   loginError.textContent = '';
   const loginId = document.querySelector('#login-id').value.trim();
   const email = loginId.includes('@') ? loginId : `${loginId}@attendance.com`;
+  loginHint.textContent = `로그인 계정: ${email}`;
   try { await signInWithEmailAndPassword(auth, email, document.querySelector('#password').value); }
-  catch { loginError.textContent = '아이디 또는 비밀번호를 확인하세요.'; }
+  catch (error) {
+    const messages = {
+      'auth/invalid-credential': '아이디 또는 비밀번호가 맞지 않거나 Firebase 로그인 계정이 없습니다.',
+      'auth/unauthorized-domain': 'Firebase Authentication의 Authorized domains에 black-c0w.github.io를 추가해야 합니다.',
+      'auth/network-request-failed': '네트워크 연결을 확인하세요.',
+      'auth/too-many-requests': '로그인 시도가 잠시 제한되었습니다. 잠시 후 다시 시도하세요.',
+      'auth/api-key-not-valid': '웹용 Firebase API 키 설정이 필요합니다.'
+    };
+    loginError.textContent = messages[error.code] || `로그인 실패: ${error.code || error.message}`;
+  }
 });
 document.querySelector('#logout-button').addEventListener('click', () => signOut(auth));
 onAuthStateChanged(auth, user => {
