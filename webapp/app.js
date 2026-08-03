@@ -115,8 +115,10 @@ async function renderDashboard(firebaseUser) {
 document.querySelector('#login-form').addEventListener('submit', async event => {
   event.preventDefault();
   loginError.textContent = '';
-  try { await signInWithEmailAndPassword(auth, document.querySelector('#email').value.trim(), document.querySelector('#password').value); }
-  catch { loginError.textContent = '이메일 또는 비밀번호를 확인하세요.'; }
+  const loginId = document.querySelector('#login-id').value.trim();
+  const email = loginId.includes('@') ? loginId : `${loginId}@attendance.com`;
+  try { await signInWithEmailAndPassword(auth, email, document.querySelector('#password').value); }
+  catch { loginError.textContent = '아이디 또는 비밀번호를 확인하세요.'; }
 });
 document.querySelector('#logout-button').addEventListener('click', () => signOut(auth));
 onAuthStateChanged(auth, user => {
