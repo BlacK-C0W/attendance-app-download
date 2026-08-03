@@ -23,16 +23,27 @@ const statusClass = status => status === '결석' ? 'absent' : status === '지�
 const attendanceRows = records => records.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)).map(record => `
   <div class="row"><div><strong>${escapeHtml(record.studentName || '이름 없음')}</strong><br><span class="muted">${escapeHtml(record.date)} ${escapeHtml(record.time)} · ${escapeHtml(record.subject || '과목 미지정')}</span></div><span class="status ${statusClass(record.status)}">${escapeHtml(record.status || '출석')}</span></div>`).join('');
 
-function flattenAttendance(snapshot) {
+function attendanceRecordsFromValue(value, fallbackId = '') {
   const result = [];
-  snapshot.forEach(student => student.forEach(record => result.push({ id: record.key, ...record.val() })));
+  const collect = (node, nodeId) => {
+    if (!node || typeof node !== 'object') return;
+    if (Object.prototype.hasOwnProperty.call(node, 'date') &&
+        (Object.prototype.hasOwnProperty.call(node, 'status') || Object.prototype.hasOwnProperty.call(node, 'studentUid'))) {
+      result.push({ id: node.id || nodeId, ...node });
+      return;
+    }
+    Object.entries(node).forEach(([key, child]) => collect(child, key));
+  };
+  collect(value, fallbackId);
   return result;
 }
 
+function flattenAttendance(snapshot) {
+  return Object.entries(snapshot.val() || {}).flatMap(([studentId, value]) => attendanceRecordsFromValue(value, studentId));
+}
+
 function studentAttendanceRecords(snapshot) {
-  const result = [];
-  snapshot.forEach(record => result.push({ id: record.key, ...record.val() }));
-  return result;
+  return attendanceRecordsFromValue(snapshot.val());
 }
 
 async function loadAttendancePaths(paths) {
