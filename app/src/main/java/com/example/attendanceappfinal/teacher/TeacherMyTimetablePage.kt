@@ -128,6 +128,10 @@ fun TeacherMyTimetablePage(
         mutableStateOf("전체")
     }
 
+    var showingRegisteredLessons by remember {
+        mutableStateOf(false)
+    }
+
 
     var currentCandidates by remember {
         mutableStateOf(emptyList<Timetable>())
@@ -341,7 +345,7 @@ fun TeacherMyTimetablePage(
 
         Text(
 
-            "📅 내 시간표",
+            if (showingRegisteredLessons) "📚 등록된 수업" else "📅 내 시간표",
 
             style =
                 MaterialTheme.typography.headlineMedium
@@ -355,6 +359,8 @@ fun TeacherMyTimetablePage(
         )
 
 
+
+        if (!showingRegisteredLessons) {
 
         Button(
 
@@ -424,11 +430,22 @@ fun TeacherMyTimetablePage(
             Text(if (importingStudentSchedules) "학생별 시간표 가져오는 중..." else "학생별 시간표 가져오기")
         }
 
+        OutlinedButton(
+            modifier = Modifier.fillMaxWidth(),
+            onClick = { showingRegisteredLessons = true }
+        ) {
+            Text("등록된 수업 관리")
+        }
+
+        }
+
 
 
         Spacer(
             Modifier.height(20.dp)
         )
+
+        if (!showingRegisteredLessons) {
 
         TeacherHolidayCalendar()
 
@@ -901,6 +918,8 @@ fun TeacherMyTimetablePage(
 
         }
 
+        }
+
 
 
 
@@ -914,6 +933,17 @@ fun TeacherMyTimetablePage(
 
 
 
+
+        if (showingRegisteredLessons) {
+
+        OutlinedButton(
+            modifier = Modifier.fillMaxWidth(),
+            onClick = { showingRegisteredLessons = false }
+        ) {
+            Text("수업 등록으로 돌아가기")
+        }
+
+        Spacer(Modifier.height(16.dp))
 
         Text(
 
@@ -1104,6 +1134,8 @@ fun TeacherMyTimetablePage(
 
             }
 
+
+        }
 
         }
 
