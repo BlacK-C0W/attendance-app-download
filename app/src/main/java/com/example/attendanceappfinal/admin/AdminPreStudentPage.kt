@@ -479,7 +479,7 @@ fun AdminPreStudentPage(
 
                     label = {
 
-                        Text("전화번호 (선택)")
+                        Text("전화번호")
 
                     },
 
@@ -500,7 +500,7 @@ fun AdminPreStudentPage(
 
                 Text(
 
-                    "전화번호와 NFC는 나중에 등록할 수 있습니다",
+                    "NFC는 나중에 등록할 수 있습니다",
 
                     style =
                         MaterialTheme.typography.bodySmall
@@ -535,13 +535,15 @@ fun AdminPreStudentPage(
 
                             grade.isBlank() ||
 
-                            className.isBlank()
+                            className.isBlank() ||
+
+                            phone.isBlank()
 
                         ) {
 
 
                             message =
-                                "이름, 학년, 반을 입력하세요"
+                                "이름, 학년, 반, 전화번호를 입력하세요"
 
 
                             return@Button
