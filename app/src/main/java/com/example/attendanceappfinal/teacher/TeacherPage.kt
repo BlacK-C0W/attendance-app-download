@@ -204,6 +204,17 @@ fun TeacherPage(
 
     }
 
+    if(page=="classAttendanceCalendar"){
+
+        TeacherClassAttendanceCalendarPage(
+            teacherUid = teacherUid,
+            onBack = { page = "" }
+        )
+
+        return
+
+    }
+
     if(page=="autoAbsence"){
 
         TeacherAutoAbsencePage(
@@ -327,6 +338,19 @@ fun TeacherPage(
         ){
 
             page="attendance"
+
+        }
+
+        Spacer(
+            Modifier.height(15.dp)
+        )
+
+        MenuCard(
+            "📊 반별 출석 현황",
+            "반을 선택해 월별 출결 달력 확인"
+        ){
+
+            page="classAttendanceCalendar"
 
         }
 
