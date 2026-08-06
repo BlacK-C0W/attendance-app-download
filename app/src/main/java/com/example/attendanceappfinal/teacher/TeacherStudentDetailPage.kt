@@ -7,7 +7,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.text.KeyboardOptions
 import com.example.attendanceappfinal.model.Attendance
 import com.example.attendanceappfinal.model.AttendanceLog
 import com.example.attendanceappfinal.model.Notification
@@ -35,6 +37,10 @@ fun TeacherStudentDetailPage(
 
     var className by remember {
         mutableStateOf(student.className)
+    }
+
+    var phone by remember {
+        mutableStateOf(student.phone)
     }
 
     var gradeOpen by remember {
@@ -215,7 +221,9 @@ fun TeacherStudentDetailPage(
 
                     "grade" to grade,
 
-                    "className" to className
+                    "className" to className,
+
+                    "phone" to phone.trim()
 
                 )
 
@@ -557,6 +565,10 @@ fun TeacherStudentDetailPage(
                     "이름 : ${student.name}"
                 )
 
+                Text(
+                    "전화번호 : ${student.phone.ifBlank { "미등록" }}"
+                )
+
 
 
                 Text(
@@ -581,6 +593,34 @@ fun TeacherStudentDetailPage(
 
                 )
 
+
+
+                Spacer(
+                    Modifier.height(10.dp)
+                )
+
+
+                OutlinedTextField(
+
+                    modifier = Modifier.fillMaxWidth(),
+
+                    value = phone,
+
+                    onValueChange = {
+                        phone = it
+                    },
+
+                    label = {
+                        Text("학생 전화번호")
+                    },
+
+                    singleLine = true,
+
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Phone
+                    )
+
+                )
 
 
                 Spacer(
