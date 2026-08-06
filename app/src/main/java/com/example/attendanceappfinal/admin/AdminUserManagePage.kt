@@ -216,7 +216,29 @@ fun AdminUserManagePage(
 
 
 
-                        users = list
+                        database
+                            .getReference("unregisteredStudents")
+                            .get()
+                            .addOnSuccessListener { unregisteredSnapshot ->
+                                unregisteredSnapshot.children.forEach { child ->
+                                    list.add(
+                                        User(
+                                            uid = "un_${child.key}",
+                                            name = child.child("name").getValue(String::class.java) ?: "",
+                                            phone = child.child("phone").getValue(String::class.java) ?: "",
+                                            role = "student",
+                                            grade = child.child("grade").getValue(String::class.java) ?: "",
+                                            className = child.child("className").getValue(String::class.java) ?: "",
+                                            isUnregisteredStudent = true,
+                                            unregisteredStudentId = child.key ?: ""
+                                        )
+                                    )
+                                }
+                                users = list
+                            }
+                            .addOnFailureListener {
+                                users = list
+                            }
 
 
 
@@ -296,6 +318,7 @@ fun AdminUserManagePage(
                         "가입대기",
                         "미가입" ->
                             user.isPreStudent ||
+                                    user.isUnregisteredStudent ||
                                     user.className == "미가입"
 
 
@@ -320,7 +343,7 @@ fun AdminUserManagePage(
 
             "미가입" ->
 
-                user.className == "미가입"
+                user.isPreStudent || user.isUnregisteredStudent || user.className == "미가입"
 
 
 
@@ -672,6 +695,30 @@ fun AdminUserManagePage(
                             }
 
 
+                    }else if(user.uid.startsWith("un_")){
+
+
+                        database
+
+                            .getReference(
+                                "unregisteredStudents"
+                            )
+
+                            .child(user.unregisteredStudentId.ifBlank { user.uid.removePrefix("un_") })
+
+                            .removeValue()
+
+                            .addOnSuccessListener {
+
+
+                                message =
+                                    "${user.name} 미가입학생 삭제 완료"
+
+
+                                loadUsers()
+
+
+                            }
 
 
                     }else{
@@ -872,7 +919,7 @@ private fun UserManageCard(
 
                         "student" ->
 
-                            if(user.className == "미가입")
+                            if(user.isPreStudent || user.isUnregisteredStudent || user.className == "미가입")
 
                                 "학생 (가입대기)"
 
@@ -923,7 +970,7 @@ private fun UserManageCard(
                 Text(
 
                     "상태 : ${
-                        if(user.className == "미가입")
+                        if(user.isPreStudent || user.isUnregisteredStudent || user.className == "미가입")
 
                             "회원가입 대기"
 
@@ -963,7 +1010,7 @@ private fun UserManageCard(
 
                 &&
 
-                user.className != "미가입"
+                !user.isPreStudent
 
             ){
 

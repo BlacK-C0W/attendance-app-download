@@ -54,22 +54,30 @@ fun AdminStudentProfileEditPage(
             return
         }
         saving = true
-        val now = System.currentTimeMillis()
-        val updates = mapOf<String, Any>(
-            "users/${student.uid}/className" to className.trim(),
-            "users/${student.uid}/phone" to studentPhone.trim(),
-            "users/${student.uid}/parentPhone" to parentPhone.trim(),
-            "users/${student.uid}/schoolName" to schoolName.trim(),
-            "users/${student.uid}/mathScore" to mathScore.trim(),
-            "users/${student.uid}/scienceScore" to scienceScore.trim(),
-            "users/${student.uid}/englishScore" to englishScore.trim(),
-            "studentScoreHistory/${student.uid}/$now" to mapOf(
-                "mathScore" to mathScore.trim(),
-                "scienceScore" to scienceScore.trim(),
-                "englishScore" to englishScore.trim(),
-                "updatedAt" to now
+        val updates: Map<String, Any> = if (student.isUnregisteredStudent) {
+            val studentId = student.unregisteredStudentId.ifBlank { student.uid.removePrefix("un_") }
+            mapOf(
+                "unregisteredStudents/$studentId/className" to className.trim(),
+                "unregisteredStudents/$studentId/phone" to studentPhone.trim()
             )
-        )
+        } else {
+            val now = System.currentTimeMillis()
+            mapOf(
+                "users/${student.uid}/className" to className.trim(),
+                "users/${student.uid}/phone" to studentPhone.trim(),
+                "users/${student.uid}/parentPhone" to parentPhone.trim(),
+                "users/${student.uid}/schoolName" to schoolName.trim(),
+                "users/${student.uid}/mathScore" to mathScore.trim(),
+                "users/${student.uid}/scienceScore" to scienceScore.trim(),
+                "users/${student.uid}/englishScore" to englishScore.trim(),
+                "studentScoreHistory/${student.uid}/$now" to mapOf(
+                    "mathScore" to mathScore.trim(),
+                    "scienceScore" to scienceScore.trim(),
+                    "englishScore" to englishScore.trim(),
+                    "updatedAt" to now
+                )
+            )
+        }
         FirebaseDatabase.getInstance().reference
             .updateChildren(updates)
             .addOnSuccessListener {
@@ -117,6 +125,7 @@ fun AdminStudentProfileEditPage(
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone)
         )
         Spacer(Modifier.height(12.dp))
+        if (!student.isUnregisteredStudent) {
         OutlinedTextField(
             value = parentPhone,
             onValueChange = { parentPhone = it },
@@ -171,6 +180,7 @@ fun AdminStudentProfileEditPage(
         }
         OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = onParentCommunicationClick) {
             Text("학부모 연락 · 안내")
+        }
         }
         Spacer(Modifier.height(20.dp))
         Button(modifier = Modifier.fillMaxWidth(), enabled = !saving, onClick = { save() }) {
