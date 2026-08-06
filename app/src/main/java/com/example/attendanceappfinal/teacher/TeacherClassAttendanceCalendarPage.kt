@@ -46,7 +46,10 @@ fun TeacherClassAttendanceCalendarPage(teacherUid: String, onBack: () -> Unit) {
             val matchesClass = selectedClass.isAll || (student.grade == selectedClass.grade && student.className == selectedClass.className)
             if (record.teacherUid != teacherUid || !matchesClass || !record.date.startsWith(month.toString())) return@forEach
             val old = counts[record.date] ?: DailyAttendanceSummary()
-            counts[record.date] = when (record.status) { "지각" -> old.copy(late = old.late + 1); "결석" -> old.copy(absent = old.absent + 1); else -> old }
+            when (record.status) {
+                "지각" -> counts[record.date] = old.copy(late = old.late + 1)
+                "결석" -> counts[record.date] = old.copy(absent = old.absent + 1)
+            }
             records.getOrPut(record.date) { mutableListOf() }.add(record)
         } }
     }
@@ -108,7 +111,7 @@ fun TeacherClassAttendanceCalendarPage(teacherUid: String, onBack: () -> Unit) {
         (List(leading) { null } + (1..month.lengthOfMonth()).map { it }).chunked(7).forEach { week ->
             Row(Modifier.fillMaxWidth()) {
                 week.forEach { day -> Box(Modifier.weight(1f).padding(2.dp).height(74.dp).clickable(enabled = day != null) { selectedDate = day?.let { month.atDay(it).toString() } }) {
-                    if (day != null) { val summary = summaries[month.atDay(day).toString()]; Column { Text(day.toString(), style = MaterialTheme.typography.labelLarge); summary?.takeIf { it.late > 0 || it.absent > 0 }?.let { Text(listOfNotNull(if (it.late > 0) "지 ${it.late}" else null, if (it.absent > 0) "결 ${it.absent}" else null).joinToString(" · "), color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall) } } }
+                    if (day != null) { val summary = summaries[month.atDay(day).toString()]; Column { Text(day.toString(), style = MaterialTheme.typography.labelLarge); summary?.let { if (it.late > 0) Text("지 ${it.late}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall); if (it.absent > 0) Text("결 ${it.absent}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall) } } }
                 } }; repeat(7 - week.size) { Spacer(Modifier.weight(1f)) }
             }
         }
