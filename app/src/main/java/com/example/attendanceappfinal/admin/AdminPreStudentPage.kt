@@ -324,6 +324,47 @@ fun AdminPreStudentPage(
         )
 
 
+        if (message.isNotBlank()) {
+
+
+            Spacer(
+
+                Modifier.height(14.dp)
+
+            )
+
+
+            Card(
+
+                modifier =
+                    Modifier.fillMaxWidth(),
+
+                shape =
+                    RoundedCornerShape(16.dp),
+
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+
+            ) {
+
+
+                Text(
+
+                    message,
+
+                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+
+                    modifier =
+                        Modifier.padding(16.dp)
+
+                )
+
+            }
+
+        }
+
+
         Spacer(
 
             Modifier.height(25.dp)
@@ -963,43 +1004,6 @@ fun AdminPreStudentPage(
             }
 
         }
-
-
-        if (message.isNotBlank()) {
-
-
-            Spacer(
-
-                Modifier.height(15.dp)
-
-            )
-
-
-            Card(
-
-                modifier =
-                    Modifier.fillMaxWidth(),
-
-                shape =
-                    RoundedCornerShape(16.dp)
-
-            ) {
-
-
-                Text(
-
-                    message,
-
-                    modifier =
-                        Modifier.padding(16.dp)
-
-                )
-
-            }
-
-        }
-
-
         Spacer(
 
             Modifier.height(20.dp)
