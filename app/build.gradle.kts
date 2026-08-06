@@ -40,10 +40,10 @@ android {
         targetSdk = 37
 
 
-        versionCode = 7
+        versionCode = 8
 
 
-        versionName = "1.0.6"
+        versionName = "1.0.7"
 
 
     }
@@ -67,6 +67,7 @@ android {
 
 
         compose = true
+        buildConfig = true
 
 
     }

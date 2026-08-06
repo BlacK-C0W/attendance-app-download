@@ -8,6 +8,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import com.example.attendanceappfinal.BuildConfig
 import com.example.attendanceappfinal.UiConfig
 import com.example.attendanceappfinal.model.User
 import com.example.attendanceappfinal.repository.FirebaseRepository
@@ -501,6 +502,13 @@ fun LoginPage(
 
 
             }
+
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "앱 버전 v${BuildConfig.VERSION_NAME}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
 
 
 
