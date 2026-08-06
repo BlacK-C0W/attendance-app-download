@@ -24,8 +24,6 @@ fun AdminPage(
 
     onStudentAttendanceClick: () -> Unit = {},
 
-    onStudentRegisterClick: () -> Unit = {},
-
     onUserManageClick: () -> Unit = {},
 
     onStudentManageClick: () -> Unit = {},
@@ -63,14 +61,8 @@ fun AdminPage(
         ),
 
         AdminMenu(
-            "📝",
-            "회원가입 승인 관리",
-            onStudentRegisterClick
-        ),
-
-        AdminMenu(
             "⏳",
-            "미가입 학생 관리",
+            "미가입학생 관리",
             onPreStudentClick
         ),
 

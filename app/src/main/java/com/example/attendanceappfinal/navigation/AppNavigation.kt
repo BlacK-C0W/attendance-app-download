@@ -20,7 +20,6 @@ import com.example.attendanceappfinal.admin.AdminStudentProfileEditPage
 import com.example.attendanceappfinal.admin.AdminStudentScoreHistoryPage
 import com.example.attendanceappfinal.admin.ParentCommunicationPage
 import com.example.attendanceappfinal.admin.AdminUserManagePage
-import com.example.attendanceappfinal.admin.UnregisteredStudentRegisterPage
 import com.example.attendanceappfinal.admin.TeacherRegisterPage
 import com.example.attendanceappfinal.admin.AdminPreStudentPage
 import com.example.attendanceappfinal.auth.LoginPage
@@ -494,13 +493,6 @@ fun AppNavigation(
 
 
 
-                onStudentRegisterClick = {
-
-                    currentScreen = "studentPreRegister"
-
-                },
-
-
                 onUserManageClick = {
 
                     currentScreen = "adminUserManage"
@@ -696,22 +688,6 @@ fun AppNavigation(
 
 
         }
-        "studentPreRegister" -> {
-
-
-            UnregisteredStudentRegisterPage(
-
-                onBack = {
-
-                    currentScreen = "admin"
-
-                }
-
-            )
-
-
-        }
-
         "adminPreStudent" -> {
 
 

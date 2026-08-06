@@ -242,7 +242,7 @@ fun TeacherStudentManagePage(
 
 
 
-    // 학생 사전등록
+    // 미가입학생 등록
 
     if(page=="register"){
 
@@ -457,10 +457,10 @@ fun TeacherStudentManagePage(
         TeacherManageCard(
 
 
-            title = "➕ 학생 사전등록",
+            title = "➕ 미가입학생 등록",
 
 
-            desc = "가입 전 학생 등록"
+            desc = "가입 전 미가입학생 등록"
 
 
         ){
