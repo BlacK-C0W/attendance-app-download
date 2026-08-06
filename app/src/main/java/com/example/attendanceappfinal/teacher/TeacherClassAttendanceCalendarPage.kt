@@ -23,7 +23,7 @@ private data class ClassOption(val grade: String = "", val className: String = "
     val isAll get() = grade.isBlank() && className.isBlank()
     val label get() = if (isAll) "전체 학년 출석 현황" else "${grade.ifBlank { "학년 미지정" }} ${className}"
 }
-private data class DailyAttendanceSummary(val present: Int = 0, val late: Int = 0, val absent: Int = 0)
+private data class DailyAttendanceSummary(val late: Int = 0, val absent: Int = 0)
 
 @Composable
 fun TeacherClassAttendanceCalendarPage(teacherUid: String, onBack: () -> Unit) {
@@ -46,7 +46,7 @@ fun TeacherClassAttendanceCalendarPage(teacherUid: String, onBack: () -> Unit) {
             val matchesClass = selectedClass.isAll || (student.grade == selectedClass.grade && student.className == selectedClass.className)
             if (record.teacherUid != teacherUid || !matchesClass || !record.date.startsWith(month.toString())) return@forEach
             val old = counts[record.date] ?: DailyAttendanceSummary()
-            counts[record.date] = when (record.status) { "지각" -> old.copy(late = old.late + 1); "결석" -> old.copy(absent = old.absent + 1); else -> old.copy(present = old.present + 1) }
+            counts[record.date] = when (record.status) { "지각" -> old.copy(late = old.late + 1); "결석" -> old.copy(absent = old.absent + 1); else -> old }
             records.getOrPut(record.date) { mutableListOf() }.add(record)
         } }
     }
@@ -108,11 +108,11 @@ fun TeacherClassAttendanceCalendarPage(teacherUid: String, onBack: () -> Unit) {
         (List(leading) { null } + (1..month.lengthOfMonth()).map { it }).chunked(7).forEach { week ->
             Row(Modifier.fillMaxWidth()) {
                 week.forEach { day -> Box(Modifier.weight(1f).padding(2.dp).height(74.dp).clickable(enabled = day != null) { selectedDate = day?.let { month.atDay(it).toString() } }) {
-                    if (day != null) { val summary = summaries[month.atDay(day).toString()]; Column { Text(day.toString(), style = MaterialTheme.typography.labelLarge); summary?.let { Text("출 ${it.present}", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.labelSmall); Text("지 ${it.late} · 결 ${it.absent}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall) } } }
+                    if (day != null) { val summary = summaries[month.atDay(day).toString()]; Column { Text(day.toString(), style = MaterialTheme.typography.labelLarge); summary?.let { Text("지 ${it.late} · 결 ${it.absent}", color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.labelSmall) } } }
                 } }; repeat(7 - week.size) { Spacer(Modifier.weight(1f)) }
             }
         }
-        Text("출: 출석 · 지: 지각 · 결: 결석 · 날짜를 누르면 상세 확인", style = MaterialTheme.typography.bodySmall)
+        Text("지: 지각 · 결: 결석 · 날짜를 누르면 상세 확인", style = MaterialTheme.typography.bodySmall)
         selectedDate?.let { date ->
             val exceptions = recordsByDate[date].orEmpty().filter { it.status == "지각" || it.status == "결석" }
             Spacer(Modifier.height(12.dp)); Text("$date 지각·결석 학생", style = MaterialTheme.typography.titleMedium)
