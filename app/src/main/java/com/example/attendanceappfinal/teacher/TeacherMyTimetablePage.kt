@@ -374,41 +374,17 @@ fun TeacherMyTimetablePage(
                     return@Button
                 }
 
-                val now = LocalTime.now()
                 val today = teacherTodayDay()
-                val current = list.filter { item ->
-                    try {
-                        val start = parseTeacherTime(item.startTime) ?: return@filter false
-                        val end = parseTeacherTime(item.endTime) ?: start.plusMinutes(90)
-                        isSameTeacherDay(item.day, today) &&
-                            !now.isBefore(start) && !now.isAfter(end)
-                    } catch (_: Exception) {
-                        false
-                    }
-                }
+                val todayLessons = list
+                    .filter { isSameTeacherDay(it.day, today) }
+                    .sortedBy { it.startTime }
 
-                when (current.size) {
-                    1 -> onClassOpen(current.first())
-                    0 -> {
-                        val todayLessons = list.filter { isSameTeacherDay(it.day, today) }
-                        val fallbackLessons = if (todayLessons.isNotEmpty()) todayLessons else list
-                        if (fallbackLessons.isEmpty()) {
-                            message = "등록된 수업이 없습니다. 내 시간표에서 수업을 먼저 등록하세요."
-                        } else {
-                            currentSelectionTitle = if (todayLessons.isNotEmpty()) "오늘 수업 선택" else "등록 수업 선택"
-                            currentSelectionDescription = if (todayLessons.isNotEmpty()) {
-                                "현재 시간에 맞는 수업을 찾지 못했습니다. 출결을 관리할 반을 선택하세요."
-                            } else {
-                                "오늘 요일에 등록된 수업이 없어 전체 등록 수업을 보여줍니다. 출결을 관리할 반을 선택하세요."
-                            }
-                            currentCandidates = fallbackLessons
-                        }
-                    }
-                    else -> {
-                        currentSelectionTitle = "현재 수업 선택"
-                        currentSelectionDescription = "현재 시간에 진행 중인 수업이 여러 개입니다. 출결을 관리할 수업을 선택하세요."
-                        currentCandidates = current
-                    }
+                if (todayLessons.isEmpty()) {
+                    message = "${today}요일에 등록된 수업이 없습니다. 내 시간표에서 수업을 먼저 등록하세요."
+                } else {
+                    currentSelectionTitle = "오늘 수업 선택"
+                    currentSelectionDescription = "${today}요일에 등록된 수업 전체입니다. 출결을 관리할 수업을 선택하세요."
+                    currentCandidates = todayLessons
                 }
                 return@Button
 
