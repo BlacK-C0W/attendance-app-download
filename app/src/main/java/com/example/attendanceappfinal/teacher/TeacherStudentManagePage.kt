@@ -9,7 +9,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.example.attendanceappfinal.UiConfig
-import com.example.attendanceappfinal.admin.StudentPreRegisterPage
+import com.example.attendanceappfinal.admin.UnregisteredStudentRegisterPage
 import com.example.attendanceappfinal.model.User
 import com.example.attendanceappfinal.nfc.NfcRegisterPage
 
@@ -248,7 +248,7 @@ fun TeacherStudentManagePage(
 
 
 
-        StudentPreRegisterPage(
+        UnregisteredStudentRegisterPage(
 
 
             onBack = {

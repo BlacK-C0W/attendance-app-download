@@ -8,9 +8,20 @@
         ".write": "auth != null && (auth.uid == $uid || root.child('users').child(auth.uid).child('role').val() == 'admin')"
       }
     },
-    "attendance": { "$uid": { ".read": "auth != null && (auth.uid == $uid || root.child('users').child(auth.uid).child('role').val() != 'student')", ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() != 'student'" } },
-    "preAttendance": { "$id": { ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() != 'student'", ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() != 'student'" } },
-    "unregisteredAttendance": { "$id": { ".read": "auth != null && root.child('users').child(auth.uid).child('role').val() != 'student'", ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() != 'student'" } },
+    "preStudents": {
+      ".read": "auth != null",
+      "$id": { ".write": "auth != null && !newData.exists() && root.child('users').child(auth.uid).child('preStudentId').val() == $id" }
+    },
+    "unregisteredStudents": {
+      ".read": "auth != null",
+      "$id": { ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() == 'admin' || root.child('users').child(auth.uid).child('role').val() == 'teacher' || (!newData.exists() && root.child('users').child(auth.uid).child('unregisteredStudentId').val() == $id))" }
+    },
+    "attendance": { "$uid": { ".read": "auth != null && (auth.uid == $uid || root.child('users').child(auth.uid).child('role').val() != 'student')", ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() != 'student' || (auth.uid == $uid && !data.exists() && (root.child('users').child(auth.uid).child('preStudentId').val() != '' || root.child('users').child(auth.uid).child('unregisteredStudentId').val() != '')))" } },
+    "preAttendance": { "$id": { ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() != 'student' || root.child('users').child(auth.uid).child('preStudentId').val() == $id)", ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() != 'student' || (!newData.exists() && root.child('users').child(auth.uid).child('preStudentId').val() == $id))" } },
+    "unregisteredAttendance": { "$id": { ".read": "auth != null && (root.child('users').child(auth.uid).child('role').val() != 'student' || root.child('users').child(auth.uid).child('unregisteredStudentId').val() == $id)", ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() != 'student' || (!newData.exists() && root.child('users').child(auth.uid).child('unregisteredStudentId').val() == $id))" } },
+    "nfc_tags": {
+      "$tag": { ".read": "auth != null", ".write": "auth != null && (root.child('users').child(auth.uid).child('role').val() != 'student' || newData.child('studentUid').val() == auth.uid)" }
+    },
     "notifications": { "$uid": { ".read": "auth != null && (auth.uid == $uid || root.child('users').child(auth.uid).child('role').val() != 'student')", ".write": "auth != null && ((auth.uid == $uid && !newData.exists()) || root.child('users').child(auth.uid).child('role').val() != 'student')" } },
     "studentScoreHistory": { "$uid": { ".read": "auth != null && (auth.uid == $uid || root.child('users').child(auth.uid).child('role').val() != 'student')", ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() == 'admin'" } },
     "holidays": { ".read": "auth != null", ".write": "auth != null && root.child('users').child(auth.uid).child('role').val() == 'admin'" },

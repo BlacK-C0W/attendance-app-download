@@ -11,6 +11,9 @@ button:disabled { opacity: .55; cursor: default; }
 h1 { margin: 16px 0 8px; font-size: 26px; } h2 { margin: 0 0 6px; font-size: 21px; } h3 { margin: 0; font-size: 17px; }
 p { color: #5c6477; line-height: 1.5; }
 form { display: grid; gap: 14px; margin-top: 24px; }
+.auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 22px; }
+.tab-button { background: #e9edf6; color: #26314a; }
+.tab-button.active { background: #3157c9; color: #fff; }
 label { display: grid; gap: 7px; font-size: 14px; font-weight: 700; }
 input { width: 100%; padding: 13px; border: 1px solid #cfd6e6; border-radius: 11px; background: #fff; }
 select { min-width: 76px; padding: 8px; border: 1px solid #cfd6e6; border-radius: 9px; background: #fff; }

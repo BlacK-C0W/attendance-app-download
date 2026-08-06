@@ -1,6 +1,6 @@
 import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js';
-import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
-import { getDatabase, get, ref, set, remove } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js';
+import { getAuth, createUserWithEmailAndPassword, onAuthStateChanged, signInWithEmailAndPassword, signOut } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
+import { getDatabase, get, ref, set, remove, update } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-database.js';
 
 const firebaseConfig = {
   apiKey: 'AIzaSyD5g3A5SqmP7DwNeSxTBBjRGZJuGGhkSrQ',
@@ -17,6 +17,9 @@ const appView = document.querySelector('#app-view');
 const content = document.querySelector('#content');
 const loginError = document.querySelector('#login-error');
 const loginHint = document.querySelector('#login-hint');
+const loginForm = document.querySelector('#login-form');
+const registerForm = document.querySelector('#register-form');
+let registrationInProgress = false;
 
 const escapeHtml = value => String(value ?? '').replace(/[&<>'"]/g, char => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
 const statusClass = status => status === '결석' ? 'absent' : status === '지각' ? 'late' : '';
@@ -189,7 +192,21 @@ async function renderDashboard(firebaseUser) {
   }
 }
 
-document.querySelector('#login-form').addEventListener('submit', async event => {
+document.querySelector('#show-login').addEventListener('click', () => {
+  loginForm.hidden = false; registerForm.hidden = true;
+  document.querySelector('#show-login').classList.add('active');
+  document.querySelector('#show-register').classList.remove('active');
+  loginError.textContent = '';
+});
+document.querySelector('#show-register').addEventListener('click', () => {
+  loginForm.hidden = true; registerForm.hidden = false;
+  document.querySelector('#show-register').classList.add('active');
+  document.querySelector('#show-login').classList.remove('active');
+  loginError.textContent = '';
+  loginHint.textContent = '관리자 또는 선생님이 등록한 미등록 학생 정보와 일치해야 합니다.';
+});
+
+loginForm.addEventListener('submit', async event => {
   event.preventDefault();
   loginError.textContent = '';
   const loginId = document.querySelector('#login-id').value.trim();
@@ -207,10 +224,65 @@ document.querySelector('#login-form').addEventListener('submit', async event => 
     loginError.textContent = messages[error.code] || `로그인 실패: ${error.code || error.message}`;
   }
 });
+
+registerForm.addEventListener('submit', async event => {
+  event.preventDefault();
+  loginError.textContent = '';
+  const submitButton = registerForm.querySelector('button[type="submit"]');
+  const id = document.querySelector('#register-id').value.trim();
+  const password = document.querySelector('#register-password').value;
+  const name = document.querySelector('#register-name').value.trim();
+  const phone = document.querySelector('#register-phone').value.trim();
+  const grade = document.querySelector('#register-grade').value;
+  const email = `${id}@attendance.com`;
+  registrationInProgress = true;
+  submitButton.disabled = true;
+  try {
+    const credential = await createUserWithEmailAndPassword(auth, email, password);
+    const studentsSnapshot = await get(ref(db, 'unregisteredStudents'));
+    const normalizedPhone = phone.replace(/\D/g, '');
+    const matched = Object.entries(studentsSnapshot.val() || {}).find(([, student]) =>
+      String(student.name || '').trim() === name &&
+      String(student.grade || '').trim() === grade &&
+      String(student.phone || '').replace(/\D/g, '') === normalizedPhone
+    );
+    if (!matched) {
+      await credential.user.delete();
+      throw new Error('등록된 미등록 학생 정보와 일치하지 않습니다.');
+    }
+    const [studentId, student] = matched;
+    const attendanceSnapshot = await get(ref(db, `unregisteredAttendance/${studentId}`));
+    const user = {
+      uid: credential.user.uid, name: student.name, phone: student.phone, email,
+      role: 'student', grade: student.grade, className: student.className || '',
+      nfcId: student.nfcTag || '', unregisteredStudentId: studentId, createdAt: Date.now()
+    };
+    await set(ref(db, `users/${credential.user.uid}`), user);
+    const changes = {
+      [`unregisteredStudents/${studentId}`]: null,
+      [`unregisteredAttendance/${studentId}`]: null
+    };
+    const copyAttendance = node => {
+      if (!node || typeof node !== 'object') return;
+      if (node.date && (node.status || node.studentUid)) {
+        const attendanceId = node.id || `${node.date}_${credential.user.uid}`;
+        changes[`attendance/${credential.user.uid}/${attendanceId}`] = { ...node, studentUid: credential.user.uid, studentName: student.name };
+      } else Object.values(node).forEach(copyAttendance);
+    };
+    copyAttendance(attendanceSnapshot.val());
+    if (student.nfcTag) changes[`nfc_tags/${student.nfcTag}`] = { studentUid: credential.user.uid, name: student.name };
+    await update(ref(db), changes);
+    registrationInProgress = false;
+    await renderDashboard(credential.user);
+  } catch (error) {
+    registrationInProgress = false;
+    loginError.textContent = error.message || '회원가입에 실패했습니다.';
+  } finally { submitButton.disabled = false; }
+});
 document.querySelector('#logout-button').addEventListener('click', () => signOut(auth));
 onAuthStateChanged(auth, user => {
   loginView.hidden = Boolean(user);
   appView.hidden = !user;
-  if (user) renderDashboard(user);
+  if (user && !registrationInProgress) renderDashboard(user);
 });
 if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js'));

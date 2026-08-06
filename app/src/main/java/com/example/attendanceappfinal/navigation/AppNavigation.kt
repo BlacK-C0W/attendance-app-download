@@ -20,7 +20,7 @@ import com.example.attendanceappfinal.admin.AdminStudentProfileEditPage
 import com.example.attendanceappfinal.admin.AdminStudentScoreHistoryPage
 import com.example.attendanceappfinal.admin.ParentCommunicationPage
 import com.example.attendanceappfinal.admin.AdminUserManagePage
-import com.example.attendanceappfinal.admin.StudentPreRegisterPage
+import com.example.attendanceappfinal.admin.UnregisteredStudentRegisterPage
 import com.example.attendanceappfinal.admin.TeacherRegisterPage
 import com.example.attendanceappfinal.admin.AdminPreStudentPage
 import com.example.attendanceappfinal.auth.LoginPage
@@ -699,7 +699,7 @@ fun AppNavigation(
         "studentPreRegister" -> {
 
 
-            StudentPreRegisterPage(
+            UnregisteredStudentRegisterPage(
 
                 onBack = {
 
