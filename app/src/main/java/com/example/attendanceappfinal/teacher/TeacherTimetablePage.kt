@@ -62,9 +62,9 @@ fun TeacherTimetablePage(
 
 
 
-    var selectedDay by remember {
+    var selectedDays by remember {
 
-        mutableStateOf("월")
+        mutableStateOf(setOf("월"))
 
     }
 
@@ -263,7 +263,7 @@ fun TeacherTimetablePage(
 
 
 
-        Text("요일 선택")
+        Text("요일 선택 (여러 요일 선택 가능)")
 
 
 
@@ -305,12 +305,27 @@ fun TeacherTimetablePage(
                     contentPadding =
                         PaddingValues(0.dp),
 
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = if (selectedDays.contains(day))
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.surfaceVariant,
+                        contentColor = if (selectedDays.contains(day))
+                            MaterialTheme.colorScheme.onPrimary
+                        else
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                    ),
+
 
 
                     onClick = {
 
 
-                        selectedDay = day
+                        selectedDays = if (selectedDays.contains(day)) {
+                            selectedDays - day
+                        } else {
+                            selectedDays + day
+                        }
 
 
                     }
@@ -668,6 +683,10 @@ fun TeacherTimetablePage(
 
                     ||
 
+                    selectedDays.isEmpty()
+
+                    ||
+
                     startTime.isBlank()
 
                     ||
@@ -678,7 +697,7 @@ fun TeacherTimetablePage(
 
 
                     message =
-                        "과목과 시작 시간을 입력하세요"
+                        "요일, 과목과 시작 시간을 입력하세요"
 
 
 
@@ -738,7 +757,7 @@ fun TeacherTimetablePage(
                         ref.key ?: "",
 
                     day =
-                        selectedDay,
+                        selectedDays.first(),
 
                     subject =
                         subject,
@@ -765,16 +784,33 @@ fun TeacherTimetablePage(
 
 
 
-                ref.setValue(data)
+                val schedules = selectedDays
+                    .sortedBy { days.indexOf(it) }
+                    .map { day ->
+                        if (day == data.day) data else {
+                            val extraRef = database
+                                .getReference("timetable")
+                                .child(student.uid)
+                                .push()
+                            data.copy(id = extraRef.key ?: "", day = day)
+                        }
+                    }
+                val updates = schedules.associate { schedule ->
+                    "timetable/${student.uid}/${schedule.id}" to schedule
+                }
+
+                database.reference.updateChildren(updates)
 
                     .addOnSuccessListener {
 
-                        syncStudentScheduleToTeacherTimetable(database, data)
+                        schedules.forEach { schedule ->
+                            syncStudentScheduleToTeacherTimetable(database, schedule)
+                        }
 
 
 
                         message =
-                            "시간표 저장 완료"
+                            "${schedules.joinToString("·") { it.day }}요일 시간표 저장 완료"
 
 
 
@@ -783,6 +819,8 @@ fun TeacherTimetablePage(
                         startTime = ""
 
                         endTime = ""
+
+                        selectedDays = emptySet()
 
 
 
