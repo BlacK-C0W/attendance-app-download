@@ -80,8 +80,8 @@ fun TeacherMyTimetablePage(
 
 
 
-    var selectedDay by remember {
-        mutableStateOf("월")
+    var selectedDays by remember {
+        mutableStateOf(setOf("월"))
     }
 
     var selectedGrade by remember {
@@ -440,7 +440,7 @@ fun TeacherMyTimetablePage(
 
 
 
-        Text("요일")
+        Text("요일 (여러 요일 선택 가능)")
 
 
 
@@ -453,14 +453,20 @@ fun TeacherMyTimetablePage(
                 weekRow.forEach { day ->
                     Button(
                         modifier = Modifier.weight(1f),
-                        onClick = { selectedDay = day },
+                        onClick = {
+                            selectedDays = if (selectedDays.contains(day)) {
+                                selectedDays - day
+                            } else {
+                                selectedDays + day
+                            }
+                        },
                         colors = ButtonDefaults.buttonColors(
-                            containerColor = if (selectedDay == day) {
+                            containerColor = if (selectedDays.contains(day)) {
                                 MaterialTheme.colorScheme.primary
                             } else {
                                 MaterialTheme.colorScheme.surfaceVariant
                             },
-                            contentColor = if (selectedDay == day) {
+                            contentColor = if (selectedDays.contains(day)) {
                                 MaterialTheme.colorScheme.onPrimary
                             } else {
                                 MaterialTheme.colorScheme.onSurfaceVariant
@@ -760,8 +766,8 @@ fun TeacherMyTimetablePage(
 
             onClick = {
 
-                if (selectedGrade.isBlank() || subject.isBlank() || startTime.isBlank() || endTime.isBlank()) {
-                    message = "학년, 과목, 시작 시간을 모두 입력하세요."
+                if (selectedDays.isEmpty() || selectedGrade.isBlank() || subject.isBlank() || startTime.isBlank() || endTime.isBlank()) {
+                    message = "요일, 학년, 과목, 시작 시간을 모두 입력하세요."
                     return@Button
                 }
 
@@ -788,7 +794,7 @@ fun TeacherMyTimetablePage(
 
 
                         day =
-                            selectedDay,
+                            selectedDays.first(),
 
 
                         subject =
@@ -823,13 +829,28 @@ fun TeacherMyTimetablePage(
 
 
 
-                ref.setValue(data)
+                val schedules = selectedDays
+                    .sortedBy { days.indexOf(it) }
+                    .map { day ->
+                        if (day == data.day) data else {
+                            val extraRef = database
+                                .getReference("teacherTimetable")
+                                .child(teacherUid)
+                                .push()
+                            data.copy(id = extraRef.key ?: "", day = day)
+                        }
+                    }
+                val updates = schedules.associate { schedule ->
+                    "teacherTimetable/$teacherUid/${schedule.id}" to schedule
+                }
+
+                database.reference.updateChildren(updates)
 
                     .addOnSuccessListener {
 
 
                         message =
-                            "저장 완료"
+                            "${schedules.joinToString("·") { it.day }}요일 시간표 저장 완료"
 
 
                         subject=""
@@ -839,6 +860,9 @@ fun TeacherMyTimetablePage(
 
 
                         endTime=""
+
+
+                        selectedDays = emptySet()
 
 
                         load()
