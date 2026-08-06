@@ -11,6 +11,7 @@ button:disabled { opacity: .55; cursor: default; }
 h1 { margin: 16px 0 8px; font-size: 26px; } h2 { margin: 0 0 6px; font-size: 21px; } h3 { margin: 0; font-size: 17px; }
 p { color: #5c6477; line-height: 1.5; }
 form { display: grid; gap: 14px; margin-top: 24px; }
+[hidden] { display: none !important; }
 .auth-tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 22px; }
 .tab-button { background: #e9edf6; color: #26314a; }
 .tab-button.active { background: #3157c9; color: #fff; }
