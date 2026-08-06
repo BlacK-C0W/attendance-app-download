@@ -1,6 +1,7 @@
 package com.example.attendanceappfinal.teacher
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -31,6 +32,8 @@ fun TeacherClassAttendanceCalendarPage(teacherUid: String, onBack: () -> Unit) {
     var selectedClass by remember { mutableStateOf<ClassOption?>(null) }
     var month by remember { mutableStateOf(YearMonth.now()) }
     var summaries by remember { mutableStateOf(emptyMap<String, DailyAttendanceSummary>()) }
+    var recordsByDate by remember { mutableStateOf(emptyMap<String, List<Attendance>>()) }
+    var selectedDate by remember { mutableStateOf<String?>(null) }
     var message by remember { mutableStateOf("") }
 
     fun loadAttendance() {
@@ -42,6 +45,7 @@ fun TeacherClassAttendanceCalendarPage(teacherUid: String, onBack: () -> Unit) {
                 .associateBy { it.uid }
             database.getReference("attendance").get().addOnSuccessListener { attendanceSnapshot ->
                 val counts = mutableMapOf<String, DailyAttendanceSummary>()
+                val records = mutableMapOf<String, MutableList<Attendance>>()
                 attendanceSnapshot.children.forEach { studentNode ->
                     studentNode.children.forEach { recordNode ->
                         val record = recordNode.getValue(Attendance::class.java) ?: return@forEach
@@ -52,9 +56,11 @@ fun TeacherClassAttendanceCalendarPage(teacherUid: String, onBack: () -> Unit) {
                             "결석" -> old.copy(absent = old.absent + 1)
                             else -> old.copy(present = old.present + 1)
                         }
+                        records.getOrPut(record.date) { mutableListOf() }.add(record)
                     }
                 }
                 summaries = counts
+                recordsByDate = records
                 message = if (students.isEmpty()) "이 반에 가입 완료 학생이 없습니다." else ""
             }.addOnFailureListener { message = "출결 기록을 불러오지 못했습니다." }
         }.addOnFailureListener { message = "학생 정보를 불러오지 못했습니다." }
@@ -70,7 +76,10 @@ fun TeacherClassAttendanceCalendarPage(teacherUid: String, onBack: () -> Unit) {
         }.addOnFailureListener { message = "수업 반 정보를 불러오지 못했습니다." }
     }
 
-    LaunchedEffect(selectedClass, month) { if (selectedClass != null) loadAttendance() }
+    LaunchedEffect(selectedClass, month) {
+        selectedDate = null
+        if (selectedClass != null) loadAttendance()
+    }
 
     Column(Modifier.fillMaxSize().padding(top = UiConfig.topPadding, start = UiConfig.sidePadding, end = UiConfig.sidePadding, bottom = UiConfig.bottomPadding)) {
         Text("반별 출석 현황", style = MaterialTheme.typography.headlineMedium)
@@ -99,7 +108,9 @@ fun TeacherClassAttendanceCalendarPage(teacherUid: String, onBack: () -> Unit) {
             cells.chunked(7).forEach { week ->
                 Row(Modifier.fillMaxWidth()) {
                     week.forEach { day ->
-                        Box(Modifier.weight(1f).padding(2.dp).height(74.dp)) {
+                        Box(Modifier.weight(1f).padding(2.dp).height(74.dp).clickable(enabled = day != null) {
+                            selectedDate = day?.let { month.atDay(it).toString() }
+                        }) {
                             if (day != null) {
                                 val summary = summaries[month.atDay(day).toString()]
                                 Column {
@@ -117,6 +128,18 @@ fun TeacherClassAttendanceCalendarPage(teacherUid: String, onBack: () -> Unit) {
             }
             Spacer(Modifier.height(8.dp))
             Text("출: 출석 · 지: 지각 · 결: 결석", style = MaterialTheme.typography.bodySmall)
+            selectedDate?.let { date ->
+                val exceptions = recordsByDate[date].orEmpty().filter { it.status == "지각" || it.status == "결석" }
+                Spacer(Modifier.height(12.dp))
+                Text("$date 출결 상세", style = MaterialTheme.typography.titleMedium)
+                if (exceptions.isEmpty()) {
+                    Text("지각·결석 학생이 없습니다.")
+                } else {
+                    exceptions.forEach { record ->
+                        Text("${record.studentName} · ${record.status}${record.reason.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: ""}")
+                    }
+                }
+            }
         }
         if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.error)
         Spacer(Modifier.weight(1f))

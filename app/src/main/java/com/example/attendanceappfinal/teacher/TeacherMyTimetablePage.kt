@@ -35,14 +35,6 @@ fun TeacherMyTimetablePage(
 
 
 
-    BackHandler {
-
-        onBack()
-
-    }
-
-
-
     val database =
         FirebaseDatabase.getInstance()
 
@@ -130,6 +122,14 @@ fun TeacherMyTimetablePage(
 
     var showingRegisteredLessons by remember {
         mutableStateOf(false)
+    }
+
+    BackHandler {
+        if (showingRegisteredLessons) {
+            showingRegisteredLessons = false
+        } else {
+            onBack()
+        }
     }
 
 
