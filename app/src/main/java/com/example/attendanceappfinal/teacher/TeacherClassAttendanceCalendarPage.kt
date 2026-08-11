@@ -3,6 +3,8 @@ package com.example.attendanceappfinal.teacher
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -14,6 +16,7 @@ import com.example.attendanceappfinal.model.PreStudent
 import com.example.attendanceappfinal.model.Timetable
 import com.example.attendanceappfinal.model.UnregisteredStudent
 import com.example.attendanceappfinal.model.User
+import com.example.attendanceappfinal.repository.attendanceStoragePath
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.FirebaseDatabase
 import java.time.YearMonth
@@ -24,6 +27,19 @@ private data class ClassOption(val grade: String = "", val className: String = "
     val label get() = if (isAll) "전체 학년 출석 현황" else "${grade.ifBlank { "학년 미지정" }} ${className}"
 }
 private data class DailyAttendanceSummary(val late: Int = 0, val absent: Int = 0)
+
+private fun isLessonOnDate(day: String, date: String): Boolean {
+    val weekday = when (java.time.LocalDate.parse(date).dayOfWeek) {
+        java.time.DayOfWeek.MONDAY -> "월"
+        java.time.DayOfWeek.TUESDAY -> "화"
+        java.time.DayOfWeek.WEDNESDAY -> "수"
+        java.time.DayOfWeek.THURSDAY -> "목"
+        java.time.DayOfWeek.FRIDAY -> "금"
+        java.time.DayOfWeek.SATURDAY -> "토"
+        java.time.DayOfWeek.SUNDAY -> "일"
+    }
+    return day.trim() == weekday || day.trim() == "${weekday}요일"
+}
 
 @Composable
 fun TeacherClassAttendanceCalendarPage(teacherUid: String, onBack: () -> Unit) {
@@ -37,6 +53,11 @@ fun TeacherClassAttendanceCalendarPage(teacherUid: String, onBack: () -> Unit) {
     var summaries by remember { mutableStateOf(emptyMap<String, DailyAttendanceSummary>()) }
     var recordsByDate by remember { mutableStateOf(emptyMap<String, List<Attendance>>()) }
     var selectedDate by remember { mutableStateOf<String?>(null) }
+    var studentsById by remember { mutableStateOf(emptyMap<String, User>()) }
+    var teacherLessons by remember { mutableStateOf(emptyList<Timetable>()) }
+    var showAbsenceDialog by remember { mutableStateOf(false) }
+    var selectedAbsentStudentIds by remember { mutableStateOf(emptySet<String>()) }
+    var savingAbsences by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
 
     fun readRecords(snapshot: DataSnapshot, students: Map<String, User>, counts: MutableMap<String, DailyAttendanceSummary>, records: MutableMap<String, MutableList<Attendance>>) {
@@ -65,6 +86,7 @@ fun TeacherClassAttendanceCalendarPage(teacherUid: String, onBack: () -> Unit) {
                     preSnapshot.children.mapNotNull { it.getValue(PreStudent::class.java)?.copy(id = it.key ?: "") }.forEach {
                         students["pre_${it.id}"] = User(uid = "pre_${it.id}", name = it.name, grade = it.grade, className = it.className, role = "student", isPreStudent = true, preStudentId = it.id)
                     }
+                    studentsById = students
                     val counts = mutableMapOf<String, DailyAttendanceSummary>(); val records = mutableMapOf<String, MutableList<Attendance>>()
                     database.getReference("attendance").get().addOnSuccessListener { normal ->
                         readRecords(normal, students, counts, records)
@@ -81,9 +103,57 @@ fun TeacherClassAttendanceCalendarPage(teacherUid: String, onBack: () -> Unit) {
         }.addOnFailureListener { message = "학생 정보를 불러오지 못했습니다." }
     }
 
+    fun saveAbsences(date: String) {
+        if (selectedClass.isAll) {
+            message = "결석 입력을 하려면 먼저 반을 선택하세요."
+            return
+        }
+        val selectedStudents = studentsById.values.filter { it.uid in selectedAbsentStudentIds }
+        if (selectedStudents.isEmpty()) {
+            message = "결석 학생을 선택하세요."
+            return
+        }
+        val subject = teacherLessons.firstOrNull {
+            it.grade == selectedClass.grade && it.className == selectedClass.className && isLessonOnDate(it.day, date)
+        }?.subject ?: "수동 결석 입력"
+        val time = java.time.LocalTime.now().format(DateTimeFormatter.ofPattern("HH:mm"))
+        savingAbsences = true
+        var remaining = selectedStudents.size
+        selectedStudents.forEach { student ->
+            val storagePath = attendanceStoragePath(student.uid)
+            val recordId = "${date}_${student.uid}_${subject}"
+            val attendance = Attendance(
+                id = recordId,
+                studentUid = student.uid,
+                studentName = student.name,
+                subject = subject,
+                teacherUid = teacherUid,
+                date = date,
+                time = time,
+                status = "결석",
+                reason = "선생님 수동 입력",
+                timestamp = System.currentTimeMillis()
+            )
+            database.getReference(storagePath.root).child(storagePath.studentId).child(recordId)
+                .setValue(attendance)
+                .addOnCompleteListener {
+                    if (--remaining == 0) {
+                        savingAbsences = false
+                        showAbsenceDialog = false
+                        selectedAbsentStudentIds = emptySet()
+                        message = "결석 처리를 저장했습니다."
+                        loadAttendance()
+                    }
+                }
+        }
+    }
+
     LaunchedEffect(teacherUid) {
         database.getReference("teacherTimetable").child(teacherUid).get().addOnSuccessListener { snapshot ->
-            val options = snapshot.children.mapNotNull { it.getValue(Timetable::class.java) }.map { ClassOption(it.grade, it.className) }.filter { it.className.isNotBlank() }.distinct()
+            teacherLessons = snapshot.children.mapNotNull { child ->
+                child.getValue(Timetable::class.java)?.copy(id = child.key ?: "")
+            }
+            val options = teacherLessons.map { ClassOption(it.grade, it.className) }.filter { it.className.isNotBlank() }.distinct()
                 .sortedWith(compareBy<ClassOption> { gradeOrder.indexOf(it.grade).let { index -> if (index < 0) Int.MAX_VALUE else index } }.thenBy { it.className })
             classes = listOf(ClassOption()) + options
         }.addOnFailureListener { message = "수업 반 정보를 불러오지 못했습니다." }
@@ -120,8 +190,52 @@ fun TeacherClassAttendanceCalendarPage(teacherUid: String, onBack: () -> Unit) {
             val exceptions = recordsByDate[date].orEmpty().filter { it.status == "지각" || it.status == "결석" }
             Spacer(Modifier.height(12.dp)); Text("$date 지각·결석 학생", style = MaterialTheme.typography.titleMedium)
             if (exceptions.isEmpty()) Text("지각·결석 학생이 없습니다.") else exceptions.forEach { record -> Text("${record.studentName} · ${record.status}${record.reason.takeIf { it.isNotBlank() }?.let { " ($it)" } ?: ""}") }
+            Spacer(Modifier.height(8.dp))
+            OutlinedButton(
+                onClick = {
+                    if (selectedClass.isAll) message = "결석 입력을 하려면 먼저 반을 선택하세요."
+                    else showAbsenceDialog = true
+                }
+            ) { Text("결석 입력") }
         }
         if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.error)
         Spacer(Modifier.weight(1f)); OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = onBack) { Text("뒤로가기") }
+    }
+
+    if (showAbsenceDialog) {
+        val classStudents = studentsById.values
+            .filter { it.grade == selectedClass.grade && it.className == selectedClass.className }
+            .sortedBy { it.name }
+        AlertDialog(
+            onDismissRequest = { if (!savingAbsences) showAbsenceDialog = false },
+            title = { Text("${selectedDate.orEmpty()} 결석 입력") },
+            text = {
+                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                    Text("결석 학생을 선택하세요.")
+                    classStudents.forEach { student ->
+                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                            Checkbox(
+                                checked = student.uid in selectedAbsentStudentIds,
+                                onCheckedChange = { checked ->
+                                    selectedAbsentStudentIds = if (checked) selectedAbsentStudentIds + student.uid
+                                    else selectedAbsentStudentIds - student.uid
+                                }
+                            )
+                            Text(student.name)
+                        }
+                    }
+                    if (classStudents.isEmpty()) Text("이 반의 학생 정보를 불러오지 못했습니다.")
+                }
+            },
+            confirmButton = {
+                Button(
+                    enabled = !savingAbsences && selectedAbsentStudentIds.isNotEmpty(),
+                    onClick = { selectedDate?.let(::saveAbsences) }
+                ) { Text(if (savingAbsences) "저장 중..." else "결석 저장") }
+            },
+            dismissButton = {
+                TextButton(enabled = !savingAbsences, onClick = { showAbsenceDialog = false }) { Text("취소") }
+            }
+        )
     }
 }
