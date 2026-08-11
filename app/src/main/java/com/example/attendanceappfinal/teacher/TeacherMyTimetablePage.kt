@@ -112,6 +112,10 @@ fun TeacherMyTimetablePage(
         mutableStateOf(emptyList<Timetable>())
     }
 
+    var rawTimetableList by remember {
+        mutableStateOf(emptyList<Timetable>())
+    }
+
     var editingTimetable by remember {
         mutableStateOf<Timetable?>(null)
     }
@@ -214,8 +218,10 @@ fun TeacherMyTimetablePage(
                 }
 
 
-                list =
-                    result.sortedBy {
+                rawTimetableList = result
+                list = result
+                    .distinctBy { it.lessonKey() }
+                    .sortedBy {
 
                         it.startTime
 
@@ -824,7 +830,7 @@ fun TeacherMyTimetablePage(
 
                 val schedules = selectedDays
                     .sortedBy { days.indexOf(it) }
-                    .map { day ->
+                    .mapNotNull { day ->
                         if (day == data.day) data else {
                             val extraRef = database
                                 .getReference("teacherTimetable")
@@ -833,6 +839,12 @@ fun TeacherMyTimetablePage(
                             data.copy(id = extraRef.key ?: "", day = day)
                         }
                     }
+                    .filterNot { candidate -> rawTimetableList.any { it.lessonKey() == candidate.lessonKey() } }
+
+                if (schedules.isEmpty()) {
+                    message = "같은 요일·반·과목·시간의 수업이 이미 등록되어 있습니다."
+                    return@Button
+                }
                 val updates = schedules.associate { schedule ->
                     "teacherTimetable/$teacherUid/${schedule.id}" to schedule
                 }
@@ -1075,15 +1087,12 @@ fun TeacherMyTimetablePage(
                         onClick = {
 
 
-                            database
-
-                                .getReference("teacherTimetable")
-
-                                .child(teacherUid)
-
-                                .child(item.id)
-
-                                .removeValue()
+                            val duplicateIds = rawTimetableList
+                                .filter { it.lessonKey() == item.lessonKey() }
+                                .map { it.id }
+                            database.reference.updateChildren(
+                                duplicateIds.associate { id -> "teacherTimetable/$teacherUid/$id" to null }
+                            )
 
                                 .addOnSuccessListener {
 
@@ -1236,6 +1245,10 @@ private fun isSameTeacherDay(timetableDay: String, today: String): Boolean {
     val normalized = timetableDay.trim()
     return normalized == today || normalized == "${today}요일"
 }
+
+private fun Timetable.lessonKey(): String = listOf(
+    day.trim(), grade.trim(), className.trim(), subject.trim(), startTime.trim(), endTime.trim()
+).joinToString("\u0001")
 
 private fun parseTeacherTime(value: String): LocalTime? {
     val normalized = value.trim()
