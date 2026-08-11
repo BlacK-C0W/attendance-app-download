@@ -197,13 +197,20 @@ fun TeacherCurrentClassPage(
 
     fun saveAttendance(){
 
+        val date = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
+        val subject = selectedTimetable?.subject.orEmpty()
+
 
 
         students.forEach { student ->
 
 
 
+            val recordId = "${date}_${student.uid}_${subject}"
+
             val attendance = Attendance(
+
+                id = recordId,
 
 
                 studentUid =
@@ -214,23 +221,17 @@ fun TeacherCurrentClassPage(
                     student.name,
 
 
-                subject =
-                    selectedTimetable
-                        ?.subject
-                        ?: "",
+                subject = subject,
 
 
                 teacher =
                     "선생님",
 
+                teacherUid = teacherUid,
 
 
-                date =
-                    SimpleDateFormat(
-                        "yyyy-MM-dd",
-                        Locale.getDefault()
-                    )
-                        .format(Date()),
+
+                date = date,
 
 
 
@@ -263,7 +264,7 @@ fun TeacherCurrentClassPage(
 
                 .child(student.uid)
 
-                .push()
+                .child(recordId)
 
                 .setValue(attendance)
 

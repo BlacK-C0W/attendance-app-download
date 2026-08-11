@@ -195,7 +195,18 @@ object AutoAbsenceRepository {
                     else writeAbsence(attendanceRef, recordId, student, timetable, now, date, onCompleted)
                 }.addOnFailureListener { onCompleted(false) }
             } else {
-                writeAbsence(attendanceRef, recordId, student, timetable, now, date, onCompleted)
+                // Older versions of the current-class screen used Firebase push keys
+                // for manual attendance. Check that day's records by subject as a
+                // compatibility fallback before creating an automatic absence.
+                attendanceRef.orderByChild("date").equalTo(date).get().addOnSuccessListener { dayRecords ->
+                    val alreadyRecorded = dayRecords.children.any { node ->
+                        node.getValue(Attendance::class.java)?.let { record ->
+                            record.subject.trim() == timetable.subject.trim()
+                        } == true
+                    }
+                    if (alreadyRecorded) onCompleted(false)
+                    else writeAbsence(attendanceRef, recordId, student, timetable, now, date, onCompleted)
+                }.addOnFailureListener { onCompleted(false) }
             }
         }.addOnFailureListener { onCompleted(false) }
     }
