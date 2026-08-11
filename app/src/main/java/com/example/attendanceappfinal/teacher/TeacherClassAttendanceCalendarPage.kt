@@ -160,7 +160,11 @@ fun TeacherClassAttendanceCalendarPage(teacherUid: String, onBack: () -> Unit) {
     }
     LaunchedEffect(selectedClass, month) { selectedDate = null; loadAttendance() }
 
-    Column(Modifier.fillMaxSize().padding(top = UiConfig.topPadding, start = UiConfig.sidePadding, end = UiConfig.sidePadding, bottom = UiConfig.bottomPadding)) {
+    Column(
+        Modifier.fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(top = UiConfig.topPadding, start = UiConfig.sidePadding, end = UiConfig.sidePadding, bottom = UiConfig.bottomPadding)
+    ) {
         Text("반별 출석 현황", style = MaterialTheme.typography.headlineMedium)
         Spacer(Modifier.height(12.dp))
         Box {
@@ -199,7 +203,7 @@ fun TeacherClassAttendanceCalendarPage(teacherUid: String, onBack: () -> Unit) {
             ) { Text("결석 입력") }
         }
         if (message.isNotBlank()) Text(message, color = MaterialTheme.colorScheme.error)
-        Spacer(Modifier.weight(1f)); OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = onBack) { Text("뒤로가기") }
+        Spacer(Modifier.height(16.dp)); OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = onBack) { Text("뒤로가기") }
     }
 
     if (showAbsenceDialog) {
