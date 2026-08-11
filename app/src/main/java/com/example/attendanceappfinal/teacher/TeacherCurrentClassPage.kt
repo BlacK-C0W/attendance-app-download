@@ -51,6 +51,10 @@ fun TeacherCurrentClassPage(
 
     }
 
+    var allTimetableList by remember { mutableStateOf(emptyList<Timetable>()) }
+    var selectedTimetable by remember { mutableStateOf<Timetable?>(null) }
+    var showManualClassPicker by remember { mutableStateOf(false) }
+
 
 
     var students by remember {
@@ -122,6 +126,16 @@ fun TeacherCurrentClassPage(
 
 
 
+    fun selectTimetable(timetable: Timetable) {
+        selectedTimetable = timetable
+        students = emptyList()
+        statusMap.clear()
+        loadStudents(listOf(timetable)) { loadedStudents ->
+            students = loadedStudents
+            loadedStudents.forEach { student -> statusMap[student.uid] = "출석" }
+        }
+    }
+
     fun load(){
 
 
@@ -158,23 +172,14 @@ fun TeacherCurrentClassPage(
                 }
 
 
-                timetableList =
-                    list.filter {
-
-                        it.day == todayKor()
-
-                    }
-
-
-
-                loadStudents(
-                    timetableList
-                ){
-                    students = it
-
-                    it.forEach { student ->
-                        statusMap[student.uid] = "출석"
-                    }
+                allTimetableList = list.sortedWith(
+                    compareBy<Timetable> { currentClassDayOrder(it.day) }.thenBy { it.startTime }
+                )
+                timetableList = allTimetableList.filter { isSameCurrentClassDay(it.day, todayKor()) }
+                timetableList.firstOrNull()?.let(::selectTimetable) ?: run {
+                    selectedTimetable = null
+                    students = emptyList()
+                    statusMap.clear()
                 }
 
 
@@ -210,7 +215,7 @@ fun TeacherCurrentClassPage(
 
 
                 subject =
-                    timetableList.firstOrNull()
+                    selectedTimetable
                         ?.subject
                         ?: "",
 
@@ -344,6 +349,15 @@ fun TeacherCurrentClassPage(
                 "현재 진행중인 수업이 없습니다."
             )
 
+            Spacer(Modifier.height(12.dp))
+            OutlinedButton(
+                modifier = Modifier.fillMaxWidth(),
+                onClick = { showManualClassPicker = true },
+                enabled = allTimetableList.isNotEmpty()
+            ) {
+                Text("다른 수업 찾아서 선택")
+            }
+
 
         }
         else{
@@ -379,6 +393,14 @@ fun TeacherCurrentClassPage(
                         Text(
                             "${item.startTime} ~ ${item.endTime}"
                         )
+
+                        Spacer(Modifier.height(8.dp))
+                        OutlinedButton(
+                            modifier = Modifier.fillMaxWidth(),
+                            onClick = { selectTimetable(item) }
+                        ) {
+                            Text(if (selectedTimetable == item) "선택된 수업" else "이 수업 선택")
+                        }
 
 
                     }
@@ -595,6 +617,31 @@ fun TeacherCurrentClassPage(
 
     }
 
+    if (showManualClassPicker) {
+        AlertDialog(
+            onDismissRequest = { showManualClassPicker = false },
+            title = { Text("수업 찾아서 선택") },
+            text = {
+                Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                    allTimetableList.forEach { item ->
+                        OutlinedButton(
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                            onClick = {
+                                showManualClassPicker = false
+                                selectTimetable(item)
+                            }
+                        ) {
+                            Text("${item.day} · ${item.grade} ${item.className} · ${item.subject} (${item.startTime}~${item.endTime})")
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { showManualClassPicker = false }) { Text("닫기") }
+            }
+        )
+    }
+
 
 
 }
@@ -604,6 +651,22 @@ fun TeacherCurrentClassPage(
 
 
 
+
+private fun isSameCurrentClassDay(day: String, today: String): Boolean {
+    val normalized = day.trim()
+    return normalized == today || normalized == "${today}요일"
+}
+
+private fun currentClassDayOrder(day: String): Int = when (day.trim().removeSuffix("요일")) {
+    "월" -> 0
+    "화" -> 1
+    "수" -> 2
+    "목" -> 3
+    "금" -> 4
+    "토" -> 5
+    "일" -> 6
+    else -> Int.MAX_VALUE
+}
 
 private fun loadStudents(
 
