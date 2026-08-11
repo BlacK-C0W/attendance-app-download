@@ -174,7 +174,27 @@ fun StudentPage(
                 }
 
 
-                timetable = list
+                database
+                    .getReference("teacherTimetable")
+                    .get()
+                    .addOnSuccessListener { teacherSnapshot ->
+                        val classSchedules = teacherSnapshot.children.flatMap { teacherNode ->
+                            teacherNode.children.mapNotNull { child ->
+                                child.getValue(Timetable::class.java)?.copy(id = child.key ?: "")
+                            }
+                        }.filter { schedule ->
+                            schedule.className.trim() == user.className.trim() &&
+                                (schedule.grade.isBlank() || schedule.grade.trim() == user.grade.trim())
+                        }
+                        timetable = (list + classSchedules)
+                            .distinctBy { it.studentLessonKey() }
+                            .sortedWith(compareBy<Timetable> { studentDayOrder(it.day) }.thenBy { it.startTime })
+                    }
+                    .addOnFailureListener {
+                        timetable = list
+                            .distinctBy { it.studentLessonKey() }
+                            .sortedWith(compareBy<Timetable> { studentDayOrder(it.day) }.thenBy { it.startTime })
+                    }
 
 
             }
@@ -233,7 +253,7 @@ fun StudentPage(
         timetable.filter {
 
 
-            it.day == today
+            isSameStudentDay(it.day, today)
 
 
         }
@@ -690,4 +710,24 @@ private fun StudentInfoCard(
     }
 
 
+}
+
+private fun Timetable.studentLessonKey(): String = listOf(
+    day.trim(), grade.trim(), className.trim(), subject.trim(), teacherUid.trim(), startTime.trim(), endTime.trim()
+).joinToString("\u0001")
+
+private fun isSameStudentDay(day: String, today: String): Boolean {
+    val normalized = day.trim()
+    return normalized == today || normalized == "${today}요일"
+}
+
+private fun studentDayOrder(day: String): Int = when (day.trim().removeSuffix("요일")) {
+    "월" -> 0
+    "화" -> 1
+    "수" -> 2
+    "목" -> 3
+    "금" -> 4
+    "토" -> 5
+    "일" -> 6
+    else -> Int.MAX_VALUE
 }
