@@ -40,10 +40,10 @@ android {
         targetSdk = 37
 
 
-        versionCode = 12
+        versionCode = 13
 
 
-        versionName = "1.0.11"
+        versionName = "1.0.12"
 
 
     }

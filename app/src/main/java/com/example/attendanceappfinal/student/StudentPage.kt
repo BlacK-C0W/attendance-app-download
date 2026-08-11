@@ -258,6 +258,24 @@ fun StudentPage(
 
         }
 
+    val todayDate = java.time.LocalDate.now(java.time.ZoneId.of("Asia/Seoul")).toString()
+
+    fun displayedClassStatus(item: Timetable): String {
+        val matchingAttendance = attendance
+            .filter { record ->
+                record.date == todayDate &&
+                    record.subject.trim() == item.subject.trim() &&
+                    (record.teacherUid.isBlank() || item.teacherUid.isBlank() || record.teacherUid == item.teacherUid)
+            }
+        // If an older automatic-absence record remains beside a later manual
+        // present/late entry, the teacher's manual entry must take precedence.
+        val savedAttendance = matchingAttendance
+            .filter { it.status == "출석" || it.status == "지각" }
+            .maxByOrNull { it.timestamp }
+            ?: matchingAttendance.maxByOrNull { it.timestamp }
+        return savedAttendance?.let { "${it.status} 처리 완료" } ?: getClassStatus(item.startTime)
+    }
+
 
     Column(
 
@@ -513,8 +531,7 @@ fun StudentPage(
             todayClass.forEach { item ->
 
 
-                val status =
-                    getClassStatus(item.startTime)
+                val status = displayedClassStatus(item)
 
 
                 StudentInfoCard(
