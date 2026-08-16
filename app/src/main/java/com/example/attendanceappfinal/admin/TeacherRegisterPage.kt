@@ -273,6 +273,21 @@ private fun migrateTeacherTimetables(
                             }
                         }
                     }
+                    migrateAttendanceTeacherReferences(
+                        database = database,
+                        oldTeacherUid = oldTeacherUid,
+                        newTeacherUid = newTeacherUid,
+                        onSuccess = { attendanceUpdates ->
+                            updates.putAll(attendanceUpdates)
+                            updates["users/$oldTeacherUid"] = null
+                            database.reference.updateChildren(updates)
+                                .addOnSuccessListener { onSuccess() }
+                                .addOnFailureListener { onFailure(it.message ?: "데이터베이스 오류") }
+                        },
+                        onFailure = onFailure
+                    )
+                    return@addOnSuccessListener
+
                     updates["users/$oldTeacherUid"] = null
                     database.reference.updateChildren(updates)
                         .addOnSuccessListener { onSuccess() }

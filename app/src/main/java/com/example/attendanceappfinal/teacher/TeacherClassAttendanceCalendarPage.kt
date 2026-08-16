@@ -54,6 +54,7 @@ fun TeacherClassAttendanceCalendarPage(teacherUid: String, onBack: () -> Unit) {
     var recordsByDate by remember { mutableStateOf(emptyMap<String, List<Attendance>>()) }
     var selectedDate by remember { mutableStateOf<String?>(null) }
     var studentsById by remember { mutableStateOf(emptyMap<String, User>()) }
+    var teacherName by remember { mutableStateOf("") }
     var teacherLessons by remember { mutableStateOf(emptyList<Timetable>()) }
     var showAbsenceDialog by remember { mutableStateOf(false) }
     var selectedAbsentStudentIds by remember { mutableStateOf(emptySet<String>()) }
@@ -65,7 +66,11 @@ fun TeacherClassAttendanceCalendarPage(teacherUid: String, onBack: () -> Unit) {
             val record = recordNode.getValue(Attendance::class.java) ?: return@forEach
             val student = students[record.studentUid] ?: return@forEach
             val matchesClass = selectedClass.isAll || (student.grade == selectedClass.grade && student.className == selectedClass.className)
-            if (record.teacherUid != teacherUid || !matchesClass || !record.date.startsWith(month.toString())) return@forEach
+            // Legacy attendance records keep the former teacher UID after an account
+            // reissue. The teacher name is preserved, so accept it as a migration bridge.
+            val belongsToTeacher = record.teacherUid == teacherUid ||
+                (teacherName.isNotBlank() && record.teacher == teacherName)
+            if (!belongsToTeacher || !matchesClass || !record.date.startsWith(month.toString())) return@forEach
             val old = counts[record.date] ?: DailyAttendanceSummary()
             when (record.status) {
                 "지각" -> counts[record.date] = old.copy(late = old.late + 1)
@@ -77,6 +82,8 @@ fun TeacherClassAttendanceCalendarPage(teacherUid: String, onBack: () -> Unit) {
 
     fun loadAttendance() {
         database.getReference("users").get().addOnSuccessListener { usersSnapshot ->
+            teacherName = usersSnapshot.child(teacherUid)
+                .getValue(User::class.java)?.name.orEmpty()
             val students = usersSnapshot.children.mapNotNull { it.getValue(User::class.java)?.copy(uid = it.key ?: "") }.filter { it.role == "student" }.associateBy { it.uid }.toMutableMap()
             database.getReference("unregisteredStudents").get().addOnSuccessListener { unSnapshot ->
                 unSnapshot.children.mapNotNull { it.getValue(UnregisteredStudent::class.java)?.copy(id = it.key ?: "") }.forEach {
