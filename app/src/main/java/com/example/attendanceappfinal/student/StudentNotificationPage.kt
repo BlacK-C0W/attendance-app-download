@@ -227,13 +227,15 @@ fun StudentNotificationPage(
 
 
 
+                    val deletions = list.associate { it.id to null }
+
                     database
 
                         .getReference("notifications")
 
                         .child(user.uid)
 
-                        .removeValue()
+                        .updateChildren(deletions)
 
                         .addOnSuccessListener {
 

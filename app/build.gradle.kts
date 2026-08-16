@@ -43,7 +43,7 @@ android {
         versionCode = 17
 
 
-        versionName = "1.0.16"
+        versionName = "1.0.17"
 
 
     }
