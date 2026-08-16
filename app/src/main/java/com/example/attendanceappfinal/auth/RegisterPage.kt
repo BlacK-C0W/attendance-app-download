@@ -60,6 +60,7 @@ fun RegisterPage(onBack: () -> Unit) {
     var name by remember { mutableStateOf("") }
     var phone by remember { mutableStateOf("") }
     var grade by remember { mutableStateOf("") }
+    var registrationCode by remember { mutableStateOf("") }
     var gradeOpen by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf("") }
     var submitting by remember { mutableStateOf(false) }
@@ -115,9 +116,17 @@ fun RegisterPage(onBack: () -> Unit) {
     }
 
     fun findStudentAfterAuthentication() {
-        database.getReference("unregisteredStudents").get()
+        val code = registrationCode.trim()
+        database.getReference("unregisteredStudents").child(code).get()
             .addOnSuccessListener { snapshot ->
-                val student = findRegistrationStudent(snapshot, "unregisteredAttendance", name, phone, grade)
+                val studentData = snapshot.getValue(UnregisteredStudent::class.java)
+                val student = studentData?.takeIf {
+                    it.name.trim() == name.trim() &&
+                        it.phone.filter(Char::isDigit) == phone.filter(Char::isDigit) &&
+                        it.grade.trim() == grade.trim()
+                }?.let {
+                    RegistrationStudent(code, "unregisteredAttendance", it.name, it.phone, it.grade, it.className, it.nfcTag)
+                }
                 if (student == null) {
                     fail("등록된 미등록 학생 정보와 일치하지 않습니다.", removeAuthUser = true)
                 } else completeRegistration(student)
@@ -126,7 +135,7 @@ fun RegisterPage(onBack: () -> Unit) {
     }
 
     fun register() {
-        if (listOf(id, password, name, phone, grade).any { it.isBlank() }) {
+        if (listOf(id, password, name, phone, grade, registrationCode).any { it.isBlank() }) {
             message = "모든 정보를 입력하세요."
             return
         }
@@ -151,6 +160,7 @@ fun RegisterPage(onBack: () -> Unit) {
         )
         OutlinedTextField(name, { name = it }, label = { Text("이름") }, modifier = Modifier.fillMaxWidth())
         OutlinedTextField(phone, { phone = it }, label = { Text("전화번호") }, modifier = Modifier.fillMaxWidth())
+        OutlinedTextField(registrationCode, { registrationCode = it }, label = { Text("가입 코드") }, modifier = Modifier.fillMaxWidth())
         Spacer(Modifier.height(10.dp))
         Box {
             Button(modifier = Modifier.fillMaxWidth(), onClick = { gradeOpen = true }) {

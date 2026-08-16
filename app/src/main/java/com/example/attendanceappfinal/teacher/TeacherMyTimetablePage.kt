@@ -451,7 +451,14 @@ fun TeacherMyTimetablePage(
             modifier = Modifier.fillMaxWidth(),
             onClick = { showingRegisteredLessons = true }
         ) {
-            Text("등록된 수업 관리")
+            Text("등록된 수업 관리 (${list.size}개)")
+        }
+
+        if (timetableLoaded && list.isNotEmpty()) {
+            Text(
+                "시간표는 보존되어 있습니다. 위 버튼에서 전체 수업을 확인·수정할 수 있습니다.",
+                style = MaterialTheme.typography.bodySmall
+            )
         }
 
         }

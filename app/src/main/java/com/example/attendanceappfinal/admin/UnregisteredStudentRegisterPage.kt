@@ -12,6 +12,7 @@ import androidx.compose.ui.unit.dp
 import com.example.attendanceappfinal.UiConfig
 import com.example.attendanceappfinal.model.UnregisteredStudent
 import com.google.firebase.database.FirebaseDatabase
+import java.util.UUID
 
 @Composable
 fun UnregisteredStudentRegisterPage(onBack: () -> Unit) {
@@ -32,7 +33,8 @@ fun UnregisteredStudentRegisterPage(onBack: () -> Unit) {
             return
         }
         submitting = true
-        val ref = database.getReference("unregisteredStudents").push()
+        val registrationCode = UUID.randomUUID().toString().replace("-", "").take(12)
+        val ref = database.getReference("unregisteredStudents").child(registrationCode)
         val student = UnregisteredStudent(
             id = ref.key.orEmpty(), name = name.trim(), phone = phone.trim(),
             grade = grade, className = className.trim(), createdAt = System.currentTimeMillis()
@@ -40,7 +42,7 @@ fun UnregisteredStudentRegisterPage(onBack: () -> Unit) {
         ref.setValue(student).addOnSuccessListener {
             name = ""; phone = ""; grade = ""; className = ""
             submitting = false
-            message = "미등록 학생을 등록했습니다. 학생은 앱에서 바로 회원가입할 수 있습니다."
+            message = "미등록 학생을 등록했습니다. 가입 코드: $registrationCode"
         }.addOnFailureListener {
             submitting = false
             message = "등록에 실패했습니다: ${it.message ?: "알 수 없는 오류"}"

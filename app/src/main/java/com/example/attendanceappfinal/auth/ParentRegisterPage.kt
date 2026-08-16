@@ -27,18 +27,25 @@ fun ParentRegisterPage(onBack: () -> Unit) {
         OutlinedTextField(code, { code = it }, Modifier.fillMaxWidth(), label = { Text("초대 코드") }, singleLine = true)
         Button(modifier = Modifier.fillMaxWidth(), onClick = {
             if (id.isBlank() || password.isBlank() || name.isBlank() || code.length != 6) { message = "모든 정보를 입력해 주세요."; return@Button }
-            database.getReference("parentInvites").child(code).get().addOnSuccessListener { invite ->
-                if (!invite.exists() || invite.child("used").getValue(Boolean::class.java) == true) { message = "유효하지 않은 초대 코드입니다."; return@addOnSuccessListener }
-                val studentUid = invite.child("studentUid").getValue(String::class.java).orEmpty()
-                FirebaseAuth.getInstance().createUserWithEmailAndPassword("$id@attendance.com", password).addOnSuccessListener { result ->
-                    val uid = result.user?.uid ?: return@addOnSuccessListener
+            FirebaseAuth.getInstance().createUserWithEmailAndPassword("$id@attendance.com", password).addOnSuccessListener { result ->
+                val uid = result.user?.uid ?: return@addOnSuccessListener
+                database.getReference("parentInvites").child(code).get().addOnSuccessListener { invite ->
+                    if (!invite.exists() || invite.child("used").getValue(Boolean::class.java) == true) {
+                        result.user?.delete()
+                        message = "유효하지 않은 초대 코드입니다."
+                        return@addOnSuccessListener
+                    }
+                    val studentUid = invite.child("studentUid").getValue(String::class.java).orEmpty()
                     val user = User(uid = uid, name = name, loginId = id, role = "parent", linkedStudentId = studentUid, parentInviteCode = code)
                     database.reference.updateChildren(mapOf(
                         "users/$uid" to user,
                         "parentInvites/$code/used" to true
                     )).addOnSuccessListener { message = "가입 완료. 로그인해 주세요." }
-                }.addOnFailureListener { message = it.message ?: "가입하지 못했습니다." }
-            }.addOnFailureListener { message = "초대 코드를 확인하지 못했습니다." }
+                }.addOnFailureListener {
+                    result.user?.delete()
+                    message = "초대 코드를 확인하지 못했습니다."
+                }
+            }.addOnFailureListener { message = it.message ?: "가입하지 못했습니다." }
         }) { Text("가입") }
         if (message.isNotBlank()) Text(message)
         OutlinedButton(modifier = Modifier.fillMaxWidth(), onClick = onBack) { Text("로그인으로") }

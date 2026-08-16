@@ -336,14 +336,6 @@ fun LoginPage(
 
 
 
-                    // 먼저 선생 임시 계정 확인
-
-                    teacherLogin()
-
-
-
-                    // 기존 학생/관리자 로그인도 같이 시도
-
                     FirebaseRepository.login(
 
                         id,
@@ -411,6 +403,12 @@ fun LoginPage(
                                     "admin" ->
 
                                         onAdminLogin(user)
+
+
+
+                                    "teacher" ->
+
+                                        onTeacherLogin(user)
 
                                     "parent" ->
 

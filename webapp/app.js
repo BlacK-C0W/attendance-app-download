@@ -267,23 +267,25 @@ registerForm.addEventListener('submit', async event => {
   const name = document.querySelector('#register-name').value.trim();
   const phone = document.querySelector('#register-phone').value.trim();
   const grade = document.querySelector('#register-grade').value;
+  const registrationCode = document.querySelector('#register-code').value.trim();
   const email = `${id}@attendance.com`;
   registrationInProgress = true;
   submitButton.disabled = true;
   try {
     const credential = await createUserWithEmailAndPassword(auth, email, password);
-    const studentsSnapshot = await get(ref(db, 'unregisteredStudents'));
+    const studentsSnapshot = await get(ref(db, `unregisteredStudents/${registrationCode}`));
     const normalizedPhone = phone.replace(/\D/g, '');
-    const matched = Object.entries(studentsSnapshot.val() || {}).find(([, student]) =>
-      String(student.name || '').trim() === name &&
-      String(student.grade || '').trim() === grade &&
-      String(student.phone || '').replace(/\D/g, '') === normalizedPhone
-    );
+    const matchedStudent = studentsSnapshot.val();
+    const matched = matchedStudent &&
+      String(matchedStudent.name || '').trim() === name &&
+      String(matchedStudent.grade || '').trim() === grade &&
+      String(matchedStudent.phone || '').replace(/\D/g, '') === normalizedPhone;
     if (!matched) {
       await credential.user.delete();
       throw new Error('등록된 미등록 학생 정보와 일치하지 않습니다.');
     }
-    const [studentId, student] = matched;
+    const studentId = registrationCode;
+    const student = matchedStudent;
     const attendanceSnapshot = await get(ref(db, `unregisteredAttendance/${studentId}`));
     const user = {
       uid: credential.user.uid, name: student.name, phone: student.phone, email,
