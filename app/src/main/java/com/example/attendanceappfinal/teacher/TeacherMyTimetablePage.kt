@@ -385,12 +385,21 @@ fun TeacherMyTimetablePage(
                     .filter { isSameTeacherDay(it.day, today) }
                     .sortedBy { it.startTime }
 
+                val currentLessons = todayLessons.filter { lesson ->
+                    isTeacherLessonInProgress(lesson, LocalTime.now())
+                }
+
                 if (todayLessons.isEmpty()) {
                     message = "${today}요일에 등록된 수업이 없습니다. 내 시간표에서 수업을 먼저 등록하세요."
+                } else if (currentLessons.isEmpty()) {
+                    message = "현재 시간에 진행 중인 수업이 없습니다. 다른 수업은 아래 버튼에서 선택할 수 있습니다."
+                } else if (currentLessons.size == 1) {
+                    message = ""
+                    onClassOpen(currentLessons.first())
                 } else {
-                    currentSelectionTitle = "오늘 수업 선택"
-                    currentSelectionDescription = "${today}요일에 등록된 수업 전체입니다. 출결을 관리할 수업을 선택하세요."
-                    currentCandidates = todayLessons
+                    currentSelectionTitle = "현재 수업 선택"
+                    currentSelectionDescription = "현재 시간에 겹쳐 등록된 수업입니다. 출결을 관리할 수업을 선택하세요."
+                    currentCandidates = currentLessons
                 }
                 return@Button
 
@@ -402,6 +411,32 @@ fun TeacherMyTimetablePage(
                 "현재 수업 확인"
             )
 
+        }
+
+        OutlinedButton(
+            modifier = Modifier.fillMaxWidth(),
+            onClick = {
+                if (!timetableLoaded) {
+                    message = "시간표를 불러오는 중입니다. 잠시 후 다시 눌러주세요."
+                    return@OutlinedButton
+                }
+
+                val today = teacherTodayDay()
+                val todayLessons = list
+                    .filter { isSameTeacherDay(it.day, today) }
+                    .sortedBy { it.startTime }
+
+                if (todayLessons.isEmpty()) {
+                    message = "${today}요일에 등록된 수업이 없습니다. 내 시간표에서 수업을 먼저 등록하세요."
+                } else {
+                    message = ""
+                    currentSelectionTitle = "오늘 다른 수업 선택"
+                    currentSelectionDescription = "오늘 등록된 수업입니다. 출결을 관리할 수업을 선택하세요."
+                    currentCandidates = todayLessons
+                }
+            }
+        ) {
+            Text("오늘 다른 수업 선택")
         }
 
         OutlinedButton(
@@ -1259,6 +1294,15 @@ private fun parseTeacherTime(value: String): LocalTime? {
     return formats.firstNotNullOfOrNull { format ->
         runCatching { LocalTime.parse(normalized, format) }.getOrNull()
     }
+}
+
+private fun isTeacherLessonInProgress(
+    timetable: Timetable,
+    now: LocalTime
+): Boolean {
+    val start = parseTeacherTime(timetable.startTime) ?: return false
+    val end = parseTeacherTime(timetable.endTime) ?: return false
+    return !now.isBefore(start) && !now.isAfter(end)
 }
 
 @Composable

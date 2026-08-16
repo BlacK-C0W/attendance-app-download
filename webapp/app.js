@@ -61,6 +61,23 @@ function toMinutes(value) {
   return match ? Number(match[1]) * 60 + Number(match[2]) : null;
 }
 
+function seoulClassTime() {
+  const parts = Object.fromEntries(new Intl.DateTimeFormat('ko-KR', {
+    timeZone: 'Asia/Seoul', weekday: 'short', hour: '2-digit', minute: '2-digit', hour12: false
+  }).formatToParts(new Date()).map(part => [part.type, part.value]));
+  return {
+    day: String(parts.weekday || '').replace('요일', ''),
+    minutes: Number(parts.hour) * 60 + Number(parts.minute)
+  };
+}
+
+function isCurrentLesson(lesson, now) {
+  const day = String(lesson.day || '').trim().replace('요일', '');
+  const start = toMinutes(lesson.startTime);
+  const end = toMinutes(lesson.endTime);
+  return day === now.day && start != null && end != null && now.minutes >= start && now.minutes <= end;
+}
+
 function enrichPersonalAttendance(records, user, timetable) {
   return records.map(record => {
     const day = koreanDay(record.date);
@@ -127,19 +144,35 @@ async function renderParent(user) {
   bindNotificationActions(notificationPath, () => renderParent(user), true);
 }
 
-async function renderTeacher(user) {
+async function renderTeacher(user, showOtherLessons = false) {
   const snapshot = await get(ref(db, `teacherTimetable/${user.uid}`));
   const lessons = Object.entries(snapshot.val() || {}).map(([id, lesson]) => ({ id, ...lesson })).sort((a, b) => `${a.day}${a.startTime}`.localeCompare(`${b.day}${b.startTime}`));
-  content.innerHTML = `<article class="card"><h2>내 시간표</h2><p>수업을 누르면 해당 반의 학생 목록을 확인할 수 있습니다.</p><div class="list">${lessons.length ? lessons.map(lesson => `<button class="lesson-button" data-lesson="${escapeHtml(lesson.id)}">${escapeHtml(lesson.day)} ${escapeHtml(lesson.startTime)}~${escapeHtml(lesson.endTime)}<br>${escapeHtml(lesson.grade)} ${escapeHtml(lesson.className)} · ${escapeHtml(lesson.subject)}</button>`).join('') : '<p class="empty">등록된 수업이 없습니다.</p>'}</div></article>`;
-  lessons.forEach(lesson => document.querySelector(`[data-lesson="${CSS.escape(lesson.id)}"]`)?.addEventListener('click', () => renderTeacherLesson(lesson)));
+  const now = seoulClassTime();
+  const todayLessons = lessons.filter(lesson => String(lesson.day || '').trim().replace('요일', '') === now.day);
+  const currentLessons = todayLessons.filter(lesson => isCurrentLesson(lesson, now));
+
+  if (!showOtherLessons && currentLessons.length === 1) {
+    await renderTeacherLesson(currentLessons[0], user);
+    return;
+  }
+
+  const displayedLessons = showOtherLessons ? todayLessons : currentLessons;
+  const title = showOtherLessons ? '오늘 다른 수업 선택' : '현재 수업 선택';
+  const emptyMessage = lessons.length === 0
+    ? '등록된 수업이 없습니다.'
+    : showOtherLessons ? '오늘 등록된 수업이 없습니다.' : '현재 시간에 진행 중인 수업이 없습니다.';
+  content.innerHTML = `<article class="card"><h2>${title}</h2><p>${showOtherLessons ? '출결을 관리할 오늘 수업을 선택하세요.' : '현재 시간에 해당하는 수업입니다.'}</p><div class="list">${displayedLessons.length ? displayedLessons.map(lesson => `<button class="lesson-button" data-lesson="${escapeHtml(lesson.id)}">${escapeHtml(lesson.day)} ${escapeHtml(lesson.startTime)}~${escapeHtml(lesson.endTime)}<br>${escapeHtml(lesson.grade)} ${escapeHtml(lesson.className)} · ${escapeHtml(lesson.subject)}</button>`).join('') : `<p class="empty">${emptyMessage}</p>`}</div>${showOtherLessons ? '<button id="show-current-lesson" class="text-button">현재 수업 확인</button>' : '<button id="show-other-lessons">오늘 다른 수업 선택</button>'}</article>`;
+  displayedLessons.forEach(lesson => document.querySelector(`[data-lesson="${CSS.escape(lesson.id)}"]`)?.addEventListener('click', () => renderTeacherLesson(lesson, user)));
+  document.querySelector('#show-other-lessons')?.addEventListener('click', () => renderTeacher(user, true));
+  document.querySelector('#show-current-lesson')?.addEventListener('click', () => renderTeacher(user, false));
 }
 
-async function renderTeacherLesson(lesson) {
+async function renderTeacherLesson(lesson, user) {
   const users = (await get(ref(db, 'users'))).val() || {};
   const normalize = value => String(value || '').replace(/\s|학년/g, '');
   const students = Object.entries(users).map(([uid, value]) => ({ uid, ...value })).filter(student => student.role === 'student' && student.className === lesson.className && normalize(student.grade) === normalize(lesson.grade));
-  content.innerHTML = `<article class="card"><button id="back-to-timetable" class="text-button">시간표로 돌아가기</button><h2>${escapeHtml(lesson.grade)} ${escapeHtml(lesson.className)} 출결관리</h2><p>${escapeHtml(lesson.subject)} · ${escapeHtml(lesson.day)} ${escapeHtml(lesson.startTime)}~${escapeHtml(lesson.endTime)}</p><div class="list">${students.length ? students.map(student => `<div class="row"><div><strong>${escapeHtml(student.name)}</strong><br><span class="muted">${escapeHtml(student.grade)} · ${escapeHtml(student.className)}</span></div><select data-status="${escapeHtml(student.uid)}"><option>출석</option><option>지각</option><option>결석</option></select></div>`).join('') : '<p class="empty">이 반에 등록된 학생이 없습니다.</p>'}</div>${students.length ? '<button id="save-attendance">출결 저장</button><p id="save-message" class="hint"></p>' : ''}</article>`;
-  document.querySelector('#back-to-timetable').addEventListener('click', () => renderTeacher({ uid: auth.currentUser.uid }));
+  content.innerHTML = `<article class="card"><button id="back-to-timetable" class="text-button">오늘 다른 수업 선택</button><h2>${escapeHtml(lesson.grade)} ${escapeHtml(lesson.className)} 출결관리</h2><p>${escapeHtml(lesson.subject)} · ${escapeHtml(lesson.day)} ${escapeHtml(lesson.startTime)}~${escapeHtml(lesson.endTime)}</p><div class="list">${students.length ? students.map(student => `<div class="row"><div><strong>${escapeHtml(student.name)}</strong><br><span class="muted">${escapeHtml(student.grade)} · ${escapeHtml(student.className)}</span></div><select data-status="${escapeHtml(student.uid)}"><option>출석</option><option>지각</option><option>결석</option></select></div>`).join('') : '<p class="empty">이 반에 등록된 학생이 없습니다.</p>'}</div>${students.length ? '<button id="save-attendance">출결 저장</button><p id="save-message" class="hint"></p>' : ''}</article>`;
+  document.querySelector('#back-to-timetable').addEventListener('click', () => renderTeacher(user, true));
   document.querySelector('#save-attendance')?.addEventListener('click', () => saveTeacherAttendance(lesson, students));
 }
 
